@@ -120,7 +120,8 @@ internal sealed class TranslatorApp : ApplicationContext
 
         attempted = true;
         var hadSpeechRequest = speechRequested;
-        var capture = CaptureArea(window, anchor, readParagraph);
+        var available = Rectangle.Intersect(Screen.FromPoint(anchor).Bounds, Desktop.ClientOnScreen(window));
+        var capture = CaptureArea(window, available, anchor, readParagraph);
         if (capture.Width < 16 || capture.Height < 12 || ocr is not { } recognizer)
         {
             speechRequested = false;
@@ -131,37 +132,62 @@ internal sealed class TranslatorApp : ApplicationContext
         using var request = new CancellationTokenSource();
         pending = request;
         var cursor = anchor;
-        var gameTerms = foregroundIsGenshin || IsMainWindow(window);
+        var isGenshin = foregroundIsGenshin;
         try
         {
-            var lines = await ReadAsync(capture, readParagraph ? 1.65f : 2.2f);
+            var wordScale = isGenshin ? 2.4f : 2.2f;
+            var lines = await ReadAsync(capture, readParagraph ? 1.65f : wordScale);
             if (!StillHovering(request, window, cursor, readParagraph))
                 return;
 
             var target = Select(lines);
             if (readParagraph && target is not null)
             {
-                var block = RectangleF.Inflate(target.Bounds, 5, 3);
-                var detail = Rectangle.Intersect(capture, Rectangle.FromLTRB((int)MathF.Floor(block.Left),
-                    (int)MathF.Floor(block.Top), (int)MathF.Ceiling(block.Right), (int)MathF.Ceiling(block.Bottom)));
-                var refined = await ReadAsync(detail, 2.6f);
-                if (!StillHovering(request, window, cursor, readParagraph))
-                    return;
-                target = TextSelection.RefineParagraph(refined, target);
+                var start = capture;
+                var expanded = TextSelection.ExtendParagraphCapture(capture, available, target.Bounds);
+                while (expanded != capture)
+                {
+                    var expandedLines = await ReadAsync(expanded, 1.65f);
+                    if (!StillHovering(request, window, cursor, readParagraph))
+                        return;
+                    var more = Select(expandedLines);
+                    if (more is null || !TextSelection.IncludesParagraph(more.Bounds, target.Bounds))
+                        break;
+
+                    lines = expandedLines;
+                    target = more;
+                    capture = expanded;
+                    expanded = TextSelection.ExtendParagraphCapture(capture, available, target.Bounds);
+                }
+
+                if (capture != start && target.Bounds.Height >= start.Height * 0.65f)
+                {
+                    // Larger book paragraphs get a tight, native-resolution pass. At native scale,
+                    // punctuation and thin serifs are less likely to be smoothed out.
+                    var detail = TextSelection.ParagraphDetailArea(capture, target.Bounds);
+                    var detailLines = await ReadAsync(detail, 1f, useGamePreprocessing: false);
+                    if (!StillHovering(request, window, cursor, readParagraph))
+                        return;
+                    if (Select(detailLines) is { } refined && TextSelection.PreservesParagraph(refined, target))
+                    {
+                        lines = detailLines;
+                        target = refined;
+                    }
+                }
             }
             if (!readParagraph && target is not null)
             {
-                var wider = CaptureArea(window, cursor, paragraph: false, expanded: true);
+                var wider = CaptureArea(window, available, cursor, paragraph: false, expanded: true);
                 if (wider != capture && MightBeClipped(target.Bounds, capture, wider))
                 {
-                    var retry = await ReadAsync(wider, 2.2f);
+                    var retry = await ReadAsync(wider, wordScale);
                     if (!StillHovering(request, window, cursor, readParagraph))
                         return;
                     target = Select(retry) ?? target;
                 }
             }
-            var word = readParagraph ? TextSelection.At(lines, cursor, false, gameTerms ? glossary : null) : target;
-            hoverEnglish = word is null ? null : gameTerms ? glossary.CorrectOcr(word.Text) : word.Text;
+            var word = readParagraph ? TextSelection.At(lines, cursor, false, isGenshin ? glossary : null) : target;
+            hoverEnglish = word is null ? null : isGenshin ? glossary.CorrectOcr(word.Text) : word.Text;
             if (speechRequested)
             {
                 speechRequested = false;
@@ -171,10 +197,10 @@ internal sealed class TranslatorApp : ApplicationContext
 
             if (target is null)
                 return;
-            if (gameTerms)
+            if (isGenshin)
                 target = target with { Text = glossary.CorrectOcr(target.Text), Context = glossary.CorrectOcr(target.Context) };
 
-            var operation = translator.TranslateAsync(target, readParagraph, gameTerms, ai.Checked ? apiKey : null, request.Token);
+            var operation = translator.TranslateAsync(target, readParagraph, isGenshin, ai.Checked ? apiKey : null, request.Token);
             if (!operation.IsCompleted)
             {
                 // Only show loading feedback when the network takes long enough to notice.
@@ -187,12 +213,13 @@ internal sealed class TranslatorApp : ApplicationContext
             if (StillHovering(request, window, cursor, readParagraph))
                 popup.Present(target.Text, translated.Text, translated.Source, target.Bounds, cursor);
 
-            Selection? Select(ScreenLine[] recognized) => TextSelection.At(recognized, cursor, readParagraph, gameTerms ? glossary : null);
+            Selection? Select(ScreenLine[] recognized) => TextSelection.At(recognized, cursor, readParagraph, isGenshin ? glossary : null);
 
-            Task<ScreenLine[]> ReadAsync(Rectangle area, float preferredScale)
+            Task<ScreenLine[]> ReadAsync(Rectangle area, float preferredScale, bool useGamePreprocessing = true)
             {
                 var scale = Math.Min(preferredScale, (float)OcrEngine.MaxImageDimension / Math.Max(area.Width, area.Height));
-                return Task.Run(() => recognizer.ReadAsync(area, scale), request.Token);
+                return Task.Run(() => recognizer.ReadAsync(area, scale, cursor,
+                    isGenshin && useGamePreprocessing ? recognized => Select(recognized) is not null : null, request.Token), request.Token);
             }
         }
         catch (Exception error) when (Translator.IsServiceError(error) || error is Win32Exception or ExternalException)
@@ -272,25 +299,20 @@ internal sealed class TranslatorApp : ApplicationContext
     private static bool HasMoved(Point point, Point origin) =>
         Math.Abs(point.X - origin.X) > MovementTolerance || Math.Abs(point.Y - origin.Y) > MovementTolerance;
 
-    private static Rectangle CaptureArea(IntPtr window, Point point, bool paragraph, bool expanded = false)
+    private static Rectangle CaptureArea(IntPtr window, Rectangle area, Point point, bool paragraph, bool expanded = false)
     {
-        var area = Rectangle.Intersect(Screen.FromPoint(point).Bounds, Desktop.ClientOnScreen(window));
         if (area.IsEmpty)
             return area;
 
         var dpi = Math.Clamp(Desktop.GetDpiForWindow(window) / 96f, 1, 2.5f);
         dpi = Math.Max(dpi, Math.Clamp(area.Width / 1920f, 1, 2.5f));
-        var halfHeight = (int)((expanded ? 100 : 55) * dpi);
+        var halfHeight = (int)((paragraph ? 170 : expanded ? 100 : 55) * dpi);
         var halfWidth = (int)((expanded ? 570 : 330) * dpi);
-        if (paragraph)
-        {
-            var step = (int)(140 * dpi);
-            var height = Math.Min(area.Height, step * 5);
-            var center = area.Top + ((point.Y - area.Top) / step * step) + step / 2;
-            var top = Math.Clamp(center - height / 2, area.Top, area.Bottom - height);
-            return new Rectangle(area.Left, top, area.Width, height);
-        }
-        var band = new Rectangle(point.X - halfWidth, point.Y - halfHeight, halfWidth * 2, halfHeight * 2);
+        var step = (int)(24 * dpi);
+        var center = area.Top + (point.Y - area.Top) / step * step + step / 2;
+        var band = paragraph
+            ? new Rectangle(area.Left, center - halfHeight, area.Width, halfHeight * 2)
+            : new Rectangle(point.X - halfWidth, point.Y - halfHeight, halfWidth * 2, halfHeight * 2);
         return Rectangle.Intersect(area, band);
     }
 

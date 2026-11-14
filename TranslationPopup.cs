@@ -60,7 +60,8 @@ internal sealed class TranslationPopup : Form
         var screen = Screen.FromPoint(cursor).WorkingArea;
         var dpi = Math.Clamp(Desktop.GetDpiForWindow(Desktop.GetForegroundWindow()) / 96f, 1, 3);
         var pad = (int)(15 * dpi);
-        var maxWidth = Math.Max(100, Math.Min((int)(455 * dpi), screen.Width - pad * 4));
+        var preferredWidth = chinese.Length > 180 ? 680 : 455;
+        var maxWidth = Math.Max(100, Math.Min((int)(preferredWidth * dpi), screen.Width - pad * 4));
         using var graphics = Graphics.FromHwnd(Desktop.GetForegroundWindow());
         var body = TextRenderer.MeasureText(graphics, chinese, bodyFont, new Size(maxWidth, int.MaxValue), TextFlags);
         var caption = TextRenderer.MeasureText(graphics, english, subFont, new Size(maxWidth, int.MaxValue), TextFlags);

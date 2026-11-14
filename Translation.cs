@@ -328,7 +328,8 @@ internal sealed partial class Translator : IDisposable
         foreach (var segment in SplitForMyMemory(text))
         {
             var uri = new Uri($"https://api.mymemory.translated.net/get?langpair=en%7Czh-CN&q={Uri.EscapeDataString(segment)}");
-            translations.Add(await PreferDirectAsync(uri, TimeSpan.FromSeconds(4),
+            var timeout = TimeSpan.FromSeconds(segment.Length > 250 ? 7 : 4);
+            translations.Add(await PreferDirectAsync(uri, timeout,
                 (client, cancellation) => ReadMyMemoryAsync(client, uri, cancellation), token));
         }
         return (string.Join(' ', translations), [], "MyMemory");

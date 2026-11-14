@@ -11,7 +11,7 @@ Windows 英中悬停翻译工具，支持单词、词组和段落翻译，以及
 
 ## 识别与翻译
 
-- Windows OCR 在本机识别光标附近的文字。段落模式会先定位文本块，再放大识别一遍。常见词组可离线查阅，最近 512 条联网译文可在重启后继续使用。
+- Windows OCR 在本机识别光标附近的文字。段落模式沿光标所在的文本块延伸，按需补读上下文，其他栏和独立选项分别处理。识别原神画面时会按需抑制背景纹路。常见词组可离线查阅，最近 512 条联网译文可在重启后继续使用。
 - 通用翻译使用 Google 网页接口，暂不可用时优先直连 MyMemory，必要时再使用系统代理。联网服务收到选中的英文文本，截图在本机处理。首次查询需要能连接至少一个翻译服务。
 - 可选 DeepSeek 上下文翻译，优先直连。设置用户环境变量 `SCREEN_TRANSLATOR_DEEPSEEK_API_KEY`，重启后在托盘启用。查词时会发送所在行作为上下文，该服务按 API 账户计费。[DeepSeek API 文档](https://api-docs.deepseek.com/quick_start/pricing/)
 
@@ -27,4 +27,4 @@ dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile
 
 ## 词库来源
 
-原神术语包含手工维护的词条及 Genshin Dictionary 社区数据。后者只提取英中词条，来源与快照哈希记录在 `GenshinDictionaryTerms.tsv`。下载数据集 `words.json` 后可用 `python import_genshin_terms.py words.json` 更新。[数据集及使用条款](https://genshin-dictionary.com/opendata)
+只有前台窗口属于原神时才使用原神术语。词库包含手工维护的词条及 Genshin Dictionary 社区数据。后者只提取英中词条，来源与快照哈希记录在 `GenshinDictionaryTerms.tsv`。下载数据集 `words.json` 后可用 `python import_genshin_terms.py words.json` 更新。[数据集及使用条款](https://genshin-dictionary.com/opendata)

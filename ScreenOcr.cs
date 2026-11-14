@@ -34,19 +34,174 @@ internal sealed partial class ScreenOcr
         return engine is null ? null : new ScreenOcr(engine);
     }
 
-    public async Task<ScreenLine[]> ReadAsync(Rectangle area, float scale)
+    public async Task<ScreenLine[]> ReadAsync(Rectangle area, float scale, Point cursor,
+        Func<ScreenLine[], bool>? hasTarget, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
         using var original = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(original))
             graphics.CopyFromScreen(area.Location, Point.Empty, area.Size, CopyPixelOperation.SourceCopy);
-        return await ReadBitmapAsync(original, area.Location, scale).ConfigureAwait(false);
+        return await ReadBitmapAsync(original, area.Location, scale, cursor, hasTarget, token).ConfigureAwait(false);
     }
 
-    internal async Task<ScreenLine[]> ReadBitmapAsync(Bitmap original, Point origin, float scale)
+    internal async Task<ScreenLine[]> ReadBitmapAsync(Bitmap original, Point origin, float scale,
+        Point cursor = default, Func<ScreenLine[], bool>? hasTarget = null, CancellationToken token = default)
     {
-        using var scaled = new Bitmap(Math.Max(1, (int)(original.Width * scale)), Math.Max(1, (int)(original.Height * scale)), PixelFormat.Format32bppArgb);
-        using (var graphics = Graphics.FromImage(scaled))
+        if (hasTarget is not null && LightLetteringCutoff(original, new Point(cursor.X - origin.X, cursor.Y - origin.Y)) is { } cutoff)
         {
+            token.ThrowIfCancellationRequested();
+            using var mask = LightTextMask(original, cutoff, token);
+            var lightLines = await RecognizeBitmapAsync(mask, origin, scale, token).ConfigureAwait(false);
+            if (hasTarget(lightLines))
+                return lightLines;
+        }
+
+        token.ThrowIfCancellationRequested();
+        var originalLines = await RecognizeBitmapAsync(original, origin, scale, token).ConfigureAwait(false);
+        if (hasTarget is null || hasTarget(originalLines))
+            return originalLines;
+
+        token.ThrowIfCancellationRequested();
+        using var enhanced = EnhanceLocalContrast(original, token);
+        return await RecognizeBitmapAsync(enhanced, origin, scale, token).ConfigureAwait(false);
+    }
+
+    private static int? LightLetteringCutoff(Bitmap bitmap, Point cursor)
+    {
+        var radius = Math.Clamp(bitmap.Width / 160, 10, 24);
+        var area = Rectangle.Intersect(new Rectangle(Point.Empty, bitmap.Size),
+            new Rectangle(cursor.X - radius, cursor.Y - radius, radius * 2 + 1, radius * 2 + 1));
+        var light = 0;
+        var white = 0;
+        var samples = 0;
+        for (var y = area.Top; y < area.Bottom; y += 2)
+        for (var x = area.Left; x < area.Right; x += 2)
+        {
+            var color = bitmap.GetPixel(x, y);
+            if (IsPale(color.R, color.G, color.B, 205))
+                light++;
+            if (IsPale(color.R, color.G, color.B, 245))
+                white++;
+            samples++;
+        }
+
+        if (light < 6 || light * 100 < samples * 4 || light * 100 > samples * 58)
+            return null;
+        return bitmap.Width > 2560 && white * 5 >= light * 3 ? 236 : 205;
+    }
+
+    private static bool IsPale(int red, int green, int blue, int cutoff)
+    {
+        var darkest = Math.Min(red, Math.Min(blue, green));
+        var brightest = Math.Max(red, Math.Max(blue, green));
+        return darkest >= cutoff && brightest - darkest <= 16;
+    }
+
+    private static Bitmap LightTextMask(Bitmap original, int cutoff, CancellationToken token)
+    {
+        // Pale UI lettering is nearly neutral, unlike most scenery and the colored status labels.
+        // Threshold at native resolution so interpolation cannot blend the lettering with scenery.
+        var mask = original.Clone(new Rectangle(Point.Empty, original.Size), PixelFormat.Format32bppArgb);
+        try
+        {
+            var data = mask.LockBits(new Rectangle(Point.Empty, mask.Size), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+            try
+            {
+                var row = new byte[mask.Width * 4];
+                for (var y = 0; y < mask.Height; y++)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var address = IntPtr.Add(data.Scan0, y * data.Stride);
+                    Marshal.Copy(address, row, 0, row.Length);
+                    for (var offset = 0; offset < row.Length; offset += 4)
+                    {
+                        var value = IsPale(row[offset + 2], row[offset + 1], row[offset], cutoff) ? (byte)0 : (byte)255;
+                        row[offset] = row[offset + 1] = row[offset + 2] = value;
+                        row[offset + 3] = 255;
+                    }
+                    Marshal.Copy(row, 0, address, row.Length);
+                }
+            }
+            finally { mask.UnlockBits(data); }
+            return mask;
+        }
+        catch
+        {
+            mask.Dispose();
+            throw;
+        }
+    }
+
+    internal static Bitmap EnhanceLocalContrast(Bitmap original, CancellationToken token)
+    {
+        var bitmap = original.Clone(new Rectangle(Point.Empty, original.Size), PixelFormat.Format32bppArgb);
+        try
+        {
+            var width = bitmap.Width;
+            var height = bitmap.Height;
+            var radius = Math.Clamp(width / 130, 10, 30);
+            var data = bitmap.LockBits(new Rectangle(Point.Empty, bitmap.Size), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+            try
+            {
+                var row = new byte[width * 4];
+                var stride = width + 1;
+                var sums = new int[stride * (height + 1)];
+                for (var y = 0; y < height; y++)
+                {
+                    token.ThrowIfCancellationRequested();
+                    Marshal.Copy(IntPtr.Add(data.Scan0, y * data.Stride), row, 0, row.Length);
+                    var running = 0;
+                    for (var x = 0; x < width; x++)
+                    {
+                        var pixel = x * 4;
+                        running += (29 * row[pixel] + 150 * row[pixel + 1] + 77 * row[pixel + 2]) >> 8;
+                        sums[(y + 1) * stride + x + 1] = sums[y * stride + x + 1] + running;
+                    }
+                }
+
+                for (var y = 0; y < height; y++)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var top = Math.Max(0, y - radius);
+                    var bottom = Math.Min(height, y + radius + 1);
+                    for (var x = 0; x < width; x++)
+                    {
+                        var left = Math.Max(0, x - radius);
+                        var right = Math.Min(width, x + radius + 1);
+                        var mean = Sum(left, top, right, bottom) / ((right - left) * (bottom - top));
+                        var luminance = Sum(x, y, x + 1, y + 1);
+                        var value = (byte)Math.Clamp(128 + (luminance - mean) * 3, 0, 255);
+                        var pixel = x * 4;
+                        row[pixel] = row[pixel + 1] = row[pixel + 2] = value;
+                        row[pixel + 3] = 255;
+                    }
+                    Marshal.Copy(row, 0, IntPtr.Add(data.Scan0, y * data.Stride), row.Length);
+                }
+
+                int Sum(int left, int top, int right, int bottom) => sums[bottom * stride + right] - sums[bottom * stride + left]
+                    - sums[top * stride + right] + sums[top * stride + left];
+            }
+            finally
+            {
+                bitmap.UnlockBits(data);
+            }
+            return bitmap;
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
+    }
+
+    private async Task<ScreenLine[]> RecognizeBitmapAsync(Bitmap original, Point origin, float scale, CancellationToken token)
+    {
+        using var resized = scale == 1f ? null : new Bitmap(Math.Max(1, (int)(original.Width * scale)),
+            Math.Max(1, (int)(original.Height * scale)), PixelFormat.Format32bppArgb);
+        var scaled = resized ?? original;
+        if (resized is not null)
+        {
+            using var graphics = Graphics.FromImage(resized);
             graphics.CompositingMode = CompositingMode.SourceCopy;
             graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
             graphics.DrawImage(original, new Rectangle(Point.Empty, scaled.Size), 0, 0, original.Width, original.Height, GraphicsUnit.Pixel);
@@ -67,7 +222,7 @@ internal sealed partial class ScreenOcr
 
         using var input = new SoftwareBitmap(BitmapPixelFormat.Bgra8, scaled.Width, scaled.Height, BitmapAlphaMode.Ignore);
         input.CopyFromBuffer(writer.DetachBuffer());
-        var result = await engine.RecognizeAsync(input).AsTask().ConfigureAwait(false);
+        var result = await engine.RecognizeAsync(input).AsTask(token).ConfigureAwait(false);
         var scaleX = (float)scaled.Width / original.Width;
         var scaleY = (float)scaled.Height / original.Height;
 
@@ -151,6 +306,9 @@ internal static partial class TextSelection
     [GeneratedRegex(WordCharacters + @"+(?:['’\-]" + WordCharacters + @"+)*")]
     private static partial Regex EnglishWord();
 
+    [GeneratedRegex(@"^\s*\d+(?:[.,]\d+)?\s*(?:m|km)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex DistanceLabel();
+
     public static Selection? At(ScreenLine[] lines, Point cursor, bool paragraph, TermGlossary? glossary)
     {
         if (paragraph)
@@ -186,9 +344,11 @@ internal static partial class TextSelection
 
     private static Selection? ParagraphAt(ScreenLine[] lines, Point cursor)
     {
-        var ordered = lines.Where(line => line.Words.Any(word => WordAt(word, (int)word.Bounds.Left) is not null))
+        var ordered = lines.Where(line => !DistanceLabel().IsMatch(line.Text)
+            && line.Words.Any(word => WordAt(word, (int)word.Bounds.Left) is not null))
             .OrderBy(line => line.Bounds.Top).ThenBy(line => line.Bounds.Left).ToArray();
-        var anchor = ordered.Select(line => (line, distance: Distance(line.Bounds, cursor, 16, 10)))
+        var anchor = ordered.Select(line => (line, distance: Distance(line.Bounds, cursor,
+                Math.Max(16, line.Bounds.Height * 0.6f), Math.Max(10, line.Bounds.Height * 0.27f))))
             .Where(item => float.IsFinite(item.distance)).OrderBy(item => item.distance).FirstOrDefault().line;
         if (anchor is null)
             return null;
@@ -215,6 +375,22 @@ internal static partial class TextSelection
         return new Selection(text, text, bounds);
     }
 
+    internal static Rectangle ParagraphDetailArea(Rectangle capture, RectangleF bounds)
+    {
+        var padding = Math.Clamp((int)(capture.Width / 150f), 12, 32);
+        var padded = RectangleF.Inflate(bounds, padding, padding);
+        // Snap OCR's slightly varying bounds to the same pixel grid before the final read.
+        const int step = 8;
+        return Rectangle.Intersect(capture, Rectangle.FromLTRB(step * (int)MathF.Floor(padded.Left / step),
+            step * (int)MathF.Floor(padded.Top / step), step * (int)MathF.Ceiling(padded.Right / step),
+            step * (int)MathF.Ceiling(padded.Bottom / step)));
+    }
+
+    internal static bool PreservesParagraph(Selection candidate, Selection initial) =>
+        IncludesParagraph(candidate.Bounds, initial.Bounds)
+        && IncludesParagraph(initial.Bounds, candidate.Bounds)
+        && candidate.Text.Count(char.IsLetterOrDigit) >= initial.Text.Count(char.IsLetterOrDigit) * 0.96f;
+
     private static ScreenLine? LinkedNeighbor(ScreenLine[] lines, ScreenLine line, bool below)
     {
         var next = Neighbor(lines, line, below);
@@ -236,28 +412,43 @@ internal static partial class TextSelection
                 return false;
 
             var overlap = Math.Min(current.Right, next.Right) - Math.Max(current.Left, next.Left);
-            var aligned = Math.Abs(current.Left - next.Left) <= height * 1.5f
-                || Math.Abs(current.Right - next.Right) <= height * 1.5f
-                || Math.Abs(current.Left + current.Width / 2 - next.Left - next.Width / 2) <= height * 1.5f;
-            return aligned && overlap > Math.Min(current.Width, next.Width) * 0.55f;
+            var narrower = Math.Min(current.Width, next.Width);
+            var wider = Math.Max(current.Width, next.Width);
+            var first = below ? line : candidate;
+            var second = below ? candidate : line;
+            if (first.Words.Length == 1 && second.Words.Length >= 4
+                && gap > height * 0.5f && char.IsUpper(second.Text.FirstOrDefault(char.IsLetter))
+                && !char.IsPunctuation(first.Text[^1]))
+                return false;
+            // Dialogue choices often end in an ellipsis and are separated by a visibly larger gap.
+            if (gap > Math.Min(current.Height, next.Height) * 0.55f
+                && (first.Text.EndsWith("...", StringComparison.Ordinal) || first.Text.EndsWith('…'))
+                && char.IsUpper(second.Text.FirstOrDefault(char.IsLetter)))
+                return false;
+
+            // A short wrapped line can be offset from the preceding line. Require stronger overlap
+            // in that case to avoid joining text from a neighboring column.
+            return overlap >= narrower * 0.82f || overlap >= wider * 0.6f;
         }).MinBy(candidate => Math.Abs(candidate.Bounds.Top + candidate.Bounds.Height / 2 - current.Top - current.Height / 2));
     }
 
-    internal static Selection RefineParagraph(ScreenLine[] lines, Selection first)
+    internal static Rectangle ExtendParagraphCapture(Rectangle capture, Rectangle available, RectangleF text)
     {
-        var block = lines.OrderBy(line => line.Bounds.Top).ThenBy(line => line.Bounds.Left).ToArray();
-        if (block.Length == 0)
-            return first;
-        var bounds = block.Select(line => line.Bounds).Aggregate(RectangleF.Union);
-        var shared = RectangleF.Intersect(bounds, first.Bounds);
-        if (shared.Height < first.Bounds.Height * 0.84f || shared.Width < first.Bounds.Width * 0.8f)
-            return first;
-
-        var text = string.Join(' ', block.Select(line => line.Text));
-        if (text.Count(char.IsLetterOrDigit) < first.Text.Count(char.IsLetterOrDigit) * 0.9)
-            return first;
-        return new Selection(text, text, first.Bounds);
+        var margin = Math.Clamp(capture.Width * 0.022f, 30f, 90f);
+        var top = capture.Top;
+        var bottom = capture.Bottom;
+        // Read more only in the direction where the selected paragraph reaches the image edge.
+        var extension = Math.Max(120, (int)(capture.Width * 0.09f));
+        if (text.Top - capture.Top <= margin)
+            top = Math.Max(available.Top, top - extension);
+        if (capture.Bottom - text.Bottom <= margin)
+            bottom = Math.Min(available.Bottom, bottom + extension);
+        return Rectangle.FromLTRB(capture.Left, top, capture.Right, bottom);
     }
+
+    internal static bool IncludesParagraph(RectangleF expanded, RectangleF initial) =>
+        expanded.Left <= initial.Left + 12 && expanded.Right >= initial.Right - 12
+        && expanded.Top <= initial.Top + 12 && expanded.Bottom >= initial.Bottom - 12;
 
     private static float Distance(RectangleF rect, Point point, float padX, float padY)
     {
