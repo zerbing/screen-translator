@@ -139,6 +139,16 @@ internal sealed class TranslatorApp : ApplicationContext
                 return;
 
             var target = Select(lines);
+            if (readParagraph && target is not null)
+            {
+                var block = RectangleF.Inflate(target.Bounds, 5, 3);
+                var detail = Rectangle.Intersect(capture, Rectangle.FromLTRB((int)MathF.Floor(block.Left),
+                    (int)MathF.Floor(block.Top), (int)MathF.Ceiling(block.Right), (int)MathF.Ceiling(block.Bottom)));
+                var refined = await ReadAsync(detail, 2.6f);
+                if (!StillHovering(request, window, cursor, readParagraph))
+                    return;
+                target = TextSelection.RefineParagraph(refined, target);
+            }
             if (!readParagraph && target is not null)
             {
                 var wider = CaptureArea(window, cursor, paragraph: false, expanded: true);
@@ -189,7 +199,7 @@ internal sealed class TranslatorApp : ApplicationContext
         {
             if (StillHovering(request, window, cursor, readParagraph))
             {
-                var message = error is ExternalException or Win32Exception ? "读取屏幕失败" : "翻译暂不可用，移开鼠标后重试";
+                var message = error is ExternalException or Win32Exception ? "读取屏幕失败" : "联网翻译暂不可用，请检查连接后重试";
                 popup.Present("", message, null, RectangleF.Empty, cursor);
             }
         }
@@ -270,11 +280,17 @@ internal sealed class TranslatorApp : ApplicationContext
 
         var dpi = Math.Clamp(Desktop.GetDpiForWindow(window) / 96f, 1, 2.5f);
         dpi = Math.Max(dpi, Math.Clamp(area.Width / 1920f, 1, 2.5f));
-        var halfHeight = (int)((paragraph ? 170 : expanded ? 100 : 55) * dpi);
+        var halfHeight = (int)((expanded ? 100 : 55) * dpi);
         var halfWidth = (int)((expanded ? 570 : 330) * dpi);
-        var band = paragraph
-            ? new Rectangle(area.Left, point.Y - halfHeight, area.Width, halfHeight * 2)
-            : new Rectangle(point.X - halfWidth, point.Y - halfHeight, halfWidth * 2, halfHeight * 2);
+        if (paragraph)
+        {
+            var step = (int)(140 * dpi);
+            var height = Math.Min(area.Height, step * 5);
+            var center = area.Top + ((point.Y - area.Top) / step * step) + step / 2;
+            var top = Math.Clamp(center - height / 2, area.Top, area.Bottom - height);
+            return new Rectangle(area.Left, top, area.Width, height);
+        }
+        var band = new Rectangle(point.X - halfWidth, point.Y - halfHeight, halfWidth * 2, halfHeight * 2);
         return Rectangle.Intersect(area, band);
     }
 

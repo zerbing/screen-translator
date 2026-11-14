@@ -15,11 +15,14 @@ internal sealed record ScreenLine(ScreenWord[] Words, RectangleF Bounds)
     public string Text => string.Join(' ', Words.Select(word => word.Text));
 }
 
-internal sealed class ScreenOcr
+internal sealed partial class ScreenOcr
 {
     private readonly OcrEngine engine;
 
     private ScreenOcr(OcrEngine engine) => this.engine = engine;
+
+    [GeneratedRegex(@"(?<=[A-Za-z])[•·](?=[sS]\b)")]
+    private static partial Regex PossessiveDot();
 
     public static ScreenOcr? Create()
     {
@@ -36,8 +39,12 @@ internal sealed class ScreenOcr
         using var original = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(original))
             graphics.CopyFromScreen(area.Location, Point.Empty, area.Size, CopyPixelOperation.SourceCopy);
+        return await ReadBitmapAsync(original, area.Location, scale).ConfigureAwait(false);
+    }
 
-        using var scaled = new Bitmap((int)(area.Width * scale), (int)(area.Height * scale), PixelFormat.Format32bppArgb);
+    internal async Task<ScreenLine[]> ReadBitmapAsync(Bitmap original, Point origin, float scale)
+    {
+        using var scaled = new Bitmap(Math.Max(1, (int)(original.Width * scale)), Math.Max(1, (int)(original.Height * scale)), PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(scaled))
         {
             graphics.CompositingMode = CompositingMode.SourceCopy;
@@ -61,13 +68,15 @@ internal sealed class ScreenOcr
         using var input = new SoftwareBitmap(BitmapPixelFormat.Bgra8, scaled.Width, scaled.Height, BitmapAlphaMode.Ignore);
         input.CopyFromBuffer(writer.DetachBuffer());
         var result = await engine.RecognizeAsync(input).AsTask().ConfigureAwait(false);
+        var scaleX = (float)scaled.Width / original.Width;
+        var scaleY = (float)scaled.Height / original.Height;
 
         return result.Lines.SelectMany(line => BuildLines(line.Words.Select(word =>
         {
             var bounds = word.BoundingRect;
             return new ScreenWord(word.Text, new RectangleF(
-                area.Left + (float)bounds.X / scale, area.Top + (float)bounds.Y / scale,
-                (float)bounds.Width / scale, (float)bounds.Height / scale));
+                origin.X + (float)bounds.X / scaleX, origin.Y + (float)bounds.Y / scaleY,
+                (float)bounds.Width / scaleX, (float)bounds.Height / scaleY));
         }))).ToArray();
     }
 
@@ -79,6 +88,8 @@ internal sealed class ScreenOcr
         {
             var text = recognized.Text.Replace("\u00AD", "", StringComparison.Ordinal)
                 .Replace('\u2010', '-').Replace('\u2011', '-');
+            if (text.Contains('•') || text.Contains('·'))
+                text = PossessiveDot().Replace(text, "'");
             if (text.Length == 0)
                 continue;
             var word = recognized with { Text = text };
@@ -184,15 +195,15 @@ internal static partial class TextSelection
 
         var above = new List<ScreenLine>();
         var below = new List<ScreenLine>();
-        // Walk in either direction from the hovered line so a nearby title or column is not pulled in.
+        // Only follow reciprocal links so the block has the same boundaries from every line.
         var previous = anchor;
-        while (above.Count < 6 && Neighbor(ordered, previous, anchor, false) is { } nextAbove)
+        while (LinkedNeighbor(ordered, previous, false) is { } nextAbove)
         {
             above.Add(nextAbove);
             previous = nextAbove;
         }
         previous = anchor;
-        while (below.Count < 6 - above.Count && Neighbor(ordered, previous, anchor, true) is { } nextBelow)
+        while (LinkedNeighbor(ordered, previous, true) is { } nextBelow)
         {
             below.Add(nextBelow);
             previous = nextBelow;
@@ -204,21 +215,48 @@ internal static partial class TextSelection
         return new Selection(text, text, bounds);
     }
 
-    private static ScreenLine? Neighbor(ScreenLine[] lines, ScreenLine previous, ScreenLine anchor, bool below)
+    private static ScreenLine? LinkedNeighbor(ScreenLine[] lines, ScreenLine line, bool below)
     {
-        var current = previous.Bounds;
-        var height = Math.Max(10, current.Height);
-        return lines.Where(line =>
+        var next = Neighbor(lines, line, below);
+        return next is not null && ReferenceEquals(Neighbor(lines, next, !below), line) ? next : null;
+    }
+
+    private static ScreenLine? Neighbor(ScreenLine[] lines, ScreenLine line, bool below)
+    {
+        var current = line.Bounds;
+        return lines.Where(candidate =>
         {
-            var next = line.Bounds;
+            var next = candidate.Bounds;
+            var height = Math.Max(10, Math.Max(current.Height, next.Height));
+            var centerDifference = next.Top + next.Height / 2 - current.Top - current.Height / 2;
             var gap = below ? next.Top - current.Bottom : current.Top - next.Bottom;
-            if (gap < -height * 0.25f || gap > Math.Max(9, height * 0.95f)
-                || next.Height > height * 1.65f || next.Height < height * 0.58f)
+            if ((below ? centerDifference : -centerDifference) <= height * 0.5f
+                || gap < -height * 0.25f || gap > height * 0.95f
+                || Math.Min(next.Height, current.Height) < height * 0.58f)
                 return false;
 
-            var overlap = Math.Min(anchor.Bounds.Right, next.Right) - Math.Max(anchor.Bounds.Left, next.Left);
-            return overlap > Math.Min(anchor.Bounds.Width, next.Width) * 0.55f;
-        }).MinBy(line => Math.Abs(line.Bounds.Top - current.Top));
+            var overlap = Math.Min(current.Right, next.Right) - Math.Max(current.Left, next.Left);
+            var aligned = Math.Abs(current.Left - next.Left) <= height * 1.5f
+                || Math.Abs(current.Right - next.Right) <= height * 1.5f
+                || Math.Abs(current.Left + current.Width / 2 - next.Left - next.Width / 2) <= height * 1.5f;
+            return aligned && overlap > Math.Min(current.Width, next.Width) * 0.55f;
+        }).MinBy(candidate => Math.Abs(candidate.Bounds.Top + candidate.Bounds.Height / 2 - current.Top - current.Height / 2));
+    }
+
+    internal static Selection RefineParagraph(ScreenLine[] lines, Selection first)
+    {
+        var block = lines.OrderBy(line => line.Bounds.Top).ThenBy(line => line.Bounds.Left).ToArray();
+        if (block.Length == 0)
+            return first;
+        var bounds = block.Select(line => line.Bounds).Aggregate(RectangleF.Union);
+        var shared = RectangleF.Intersect(bounds, first.Bounds);
+        if (shared.Height < first.Bounds.Height * 0.84f || shared.Width < first.Bounds.Width * 0.8f)
+            return first;
+
+        var text = string.Join(' ', block.Select(line => line.Text));
+        if (text.Count(char.IsLetterOrDigit) < first.Text.Count(char.IsLetterOrDigit) * 0.9)
+            return first;
+        return new Selection(text, text, first.Bounds);
     }
 
     private static float Distance(RectangleF rect, Point point, float padX, float padY)

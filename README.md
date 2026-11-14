@@ -11,9 +11,9 @@ Windows 英中悬停翻译工具，支持单词、词组和段落翻译，以及
 
 ## 识别与翻译
 
-- Windows OCR 在本机识别光标附近的文字。常见词组可离线查阅，最近 512 条联网译文可在重启后继续使用。
-- 通用翻译使用 Google 网页接口，暂不可用时尝试 MyMemory。联网服务收到选中的英文文本，截图在本机处理。
-- 可选 DeepSeek 上下文翻译。设置用户环境变量 `SCREEN_TRANSLATOR_DEEPSEEK_API_KEY`，重启后在托盘启用。查词时会发送所在行作为上下文，该服务按 API 账户计费。[DeepSeek API 文档](https://api-docs.deepseek.com/quick_start/pricing/)
+- Windows OCR 在本机识别光标附近的文字。段落模式会先定位文本块，再放大识别一遍。常见词组可离线查阅，最近 512 条联网译文可在重启后继续使用。
+- 通用翻译使用 Google 网页接口，暂不可用时优先直连 MyMemory，必要时再使用系统代理。联网服务收到选中的英文文本，截图在本机处理。首次查询需要能连接至少一个翻译服务。
+- 可选 DeepSeek 上下文翻译，优先直连。设置用户环境变量 `SCREEN_TRANSLATOR_DEEPSEEK_API_KEY`，重启后在托盘启用。查词时会发送所在行作为上下文，该服务按 API 账户计费。[DeepSeek API 文档](https://api-docs.deepseek.com/quick_start/pricing/)
 
 ## 环境与构建
 
