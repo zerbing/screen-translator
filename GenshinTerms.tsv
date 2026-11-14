@@ -1,0 +1,542 @@
+﻿# 任务、战斗、道具、地点和角色的常见英中对照
+Adventurers' Guild	冒险家协会
+Adventurer Handbook	冒险之证
+Adventurer's Handbook	冒险之证
+Adventure Rank	冒险等阶
+Anemoculus	风神瞳
+Anemo DMG	风元素伤害
+Archon Quest	魔神任务
+Archon Quests	魔神任务
+Ascension Material	突破材料
+Ascension Materials	突破材料
+Blessing of the Welkin Moon	空月祝福
+Character EXP	角色经验
+Condensed Resin	浓缩树脂
+CRIT DMG	暴击伤害
+CRIT Rate	暴击率
+Crystal Core	晶核
+Cryo DMG	冰元素伤害
+Daily Commission	每日委托
+Daily Commissions	每日委托
+Dendro DMG	草元素伤害
+Dendroculus	草神瞳
+Electro DMG	雷元素伤害
+Electroculus	雷神瞳
+Elemental Burst	元素爆发
+Elemental Energy	元素能量
+Elemental Mastery	元素精通
+Elemental Reaction	元素反应
+Elemental Reactions	元素反应
+Elemental Resonance	元素共鸣
+Elemental Skill	元素战技
+Energy Recharge	元素充能效率
+Enhancement Ore	精锻用杂矿
+Exquisite Chest	精致的宝箱
+Fine Enhancement Ore	精锻用良矿
+Fontaine	枫丹
+Fragile Resin	脆弱树脂
+Geo DMG	岩元素伤害
+Geoculus	岩神瞳
+Hydro DMG	水元素伤害
+Hydroculus	水神瞳
+Inazuma	稻妻
+Intertwined Fate	纠缠之缘
+Acquaint Fate	相遇之缘
+Ley Line Blossom	地脉之花
+Ley Line Disorder	地脉异常
+Ley Line Disorders	地脉异常
+Ley Line Outcrop	地脉衍出
+Liyue	璃月
+Luxurious Chest	华丽的宝箱
+Mondstadt	蒙德
+Mystic Enhancement Ore	精锻用魔矿
+Natlan	纳塔
+Normal Attack	普通攻击
+Normal Attacks	普通攻击
+Charged Attack	重击
+Charged Attacks	重击
+Plunging Attack	下落攻击
+Plunging Attacks	下落攻击
+Original Resin	原粹树脂
+Parametric Transformer	参量质变仪
+Paimon	派蒙
+Precious Chest	珍贵的宝箱
+Primogem	原石
+Primogems	原石
+Pyro DMG	火元素伤害
+Pyroculus	火神瞳
+Serenitea Pot	尘歌壶
+Shrine of Depths	地灵龛
+Snezhnaya	至冬
+Spiral Abyss	深境螺旋
+Statue of The Seven	七天神像
+Statues of The Seven	七天神像
+Stormterror's Lair	风龙废墟
+Story Quest	传说任务
+Story Quests	传说任务
+Sumeru	须弥
+Teleport Waypoint	传送锚点
+Teleport Waypoints	传送锚点
+Teyvat	提瓦特
+The Chasm	层岩巨渊
+World Quest	世界任务
+World Quests	世界任务
+Adventure EXP	冒险阅历
+Adventure Rank Ascension	冒险等阶突破
+World Level	世界等级
+Character Event Wish	角色活动祈愿
+Weapon Event Wish	武器活动祈愿
+Standard Wish	常驻祈愿
+Beginners' Wish	新手祈愿
+Chronicled Wish	集录祈愿
+Wanderlust Invocation	奔行世间
+Epitome Invocation	神铸赋形
+Epitomized Path	神铸定轨
+Fate Point	命定值
+Fate Points	命定值
+Capturing Radiance	捕获明光
+Test Run	且试身手
+Masterless Stardust	无主的星尘
+Masterless Starglitter	无主的星辉
+Genesis Crystal	创世结晶
+Genesis Crystals	创世结晶
+Battle Pass	纪行
+Gnostic Hymn	珍珠纪行
+Gnostic Chorus	珍珠之歌
+Hangout Event	邀约事件
+Hangout Events	邀约事件
+Random Event	随机事件
+Hidden Exploration Objective	隐藏探索目标
+Reputation EXP	声望经验
+Encounter Points	历练点
+Long-Term Encounter Points	长效历练点
+Imaginarium Theater	幻想真境剧诗
+Envisaged Echoes	绘想游迹
+Stygian Onslaught	幽境危战
+Abyssal Moon Spire	渊月螺旋
+Abyss Corridor	深境回廊
+Blessing of the Abyssal Moon	渊月祝福
+Ley Line Overflow	地脉移涌
+Overflowing Mastery	精通移涌
+Co-Op Mode	多人游戏
+Trial Character	试用角色
+Character Trial	角色试用
+Training Guide	养成指南
+Focused Experience Mode	专注模式
+Anemo	风元素
+Geo	岩元素
+Electro	雷元素
+Dendro	草元素
+Hydro	水元素
+Pyro	火元素
+Cryo	冰元素
+Vaporize reaction	蒸发反应
+Melt reaction	融化反应
+Burning reaction	燃烧反应
+Overloaded	超载
+Electro-Charged	感电
+Superconduct	超导
+Swirl reaction	扩散反应
+Crystallize reaction	结晶反应
+Frozen reaction	冻结反应
+Shatter reaction	碎冰反应
+Quicken reaction	原激化反应
+Aggravate reaction	超激化反应
+Spread reaction	蔓激化反应
+Bloom reaction	绽放反应
+Hyperbloom	超绽放
+Burgeon reaction	烈绽放反应
+Vaporize	蒸发	label
+Melt	融化	label
+Burning	燃烧	label
+Swirl	扩散	label
+Crystallize	结晶	label
+Frozen	冻结	label
+Shatter	碎冰	label
+Quicken	原激化	label
+Aggravate	超激化	label
+Spread	蔓激化	label
+Bloom	绽放	label
+Burgeon	烈绽放	label
+Dendro Core	草原核
+Dendro Cores	草原核
+Lunar-Charged	月感电
+Lunar-Bloom	月绽放
+Lunar-Crystallize	月结晶
+Nightsoul's Blessing	夜魂加持
+Nightsoul Burst	夜魂迸发
+Nightsoul Transmission	夜魂传递
+Nightsoul points	夜魂值
+Phlogiston	燃素
+Elemental Particle	元素微粒
+Elemental Particles	元素微粒
+Elemental Orb	元素晶球
+Elemental Orbs	元素晶球
+Elemental DMG	元素伤害
+Elemental RES	元素抗性
+Physical DMG	物理伤害
+Physical RES	物理抗性
+Physical DMG Bonus	物理伤害加成
+Anemo DMG Bonus	风元素伤害加成
+Geo DMG Bonus	岩元素伤害加成
+Electro DMG Bonus	雷元素伤害加成
+Dendro DMG Bonus	草元素伤害加成
+Hydro DMG Bonus	水元素伤害加成
+Pyro DMG Bonus	火元素伤害加成
+Cryo DMG Bonus	冰元素伤害加成
+Anemo RES	风元素抗性
+Geo RES	岩元素抗性
+Electro RES	雷元素抗性
+Dendro RES	草元素抗性
+Hydro RES	水元素抗性
+Pyro RES	火元素抗性
+Cryo RES	冰元素抗性
+Healing Bonus	治疗加成
+Incoming Healing Bonus	受治疗加成
+Shield Strength	护盾强效
+DMG Absorption	伤害吸收量
+DMG Bonus	伤害加成
+DMG Reduction	伤害减免
+Max HP	生命值上限
+Base ATK	基础攻击力
+ATK SPD	攻击速度
+Movement SPD	移动速度
+Normal Attack SPD	普通攻击速度
+Stamina Consumption	体力消耗
+Resistance to Interruption	抗打断能力
+AoE DMG	范围伤害
+AoE Anemo DMG	风元素范围伤害
+AoE Geo DMG	岩元素范围伤害
+AoE Electro DMG	雷元素范围伤害
+AoE Dendro DMG	草元素范围伤害
+AoE Hydro DMG	水元素范围伤害
+AoE Pyro DMG	火元素范围伤害
+AoE Cryo DMG	冰元素范围伤害
+Talent Level-Up Materials	天赋培养素材
+Learned Talent	已学习的天赋
+Crown of Insight	智识之冕
+Companionship EXP	好感经验
+Stella Fortuna	命星
+Weapon EXP	武器经验
+Weapon Ascension Materials	武器突破素材
+Artifact EXP	圣遗物经验
+Artifact Set	圣遗物套装
+Artifact Sets	圣遗物套装
+Flower of Life	生之花
+Plume of Death	死之羽
+Sands of Eon	时之沙
+Goblet of Eonothem	空之杯
+Circlet of Logos	理之冠
+Artifact Strongbox	圣匣
+Mystic Offering	还圣奥迹
+Artifact Transmuter	圣言自明机
+Sanctifying Elixir	祝圣之霜
+Sanctifying Unction	祝圣油膏
+Sanctifying Essence	祝圣精华
+Dust of Enlightenment	启圣之尘
+Viridescent Venerer	翠绿之影
+Noblesse Oblige	昔日宗室之仪
+Gladiator's Finale	角斗士的终幕礼
+Wanderer's Troupe	流浪大地的乐团
+Thundering Fury	如雷的盛怒
+Thundersoother	平息鸣雷的尊者
+Crimson Witch of Flames	炽烈的炎之魔女
+Lavawalker	渡过烈火的贤人
+Blizzard Strayer	冰风迷途的勇士
+Heart of Depth	沉沦之心
+Pale Flame	苍白之火
+Tenacity of the Millelith	千岩牢固
+Emblem of Severed Fate	绝缘之旗印
+Shimenawa's Reminiscence	追忆之注连
+Husk of Opulent Dreams	华馆梦醒形骸记
+Ocean-Hued Clam	海染砗磲
+Vermillion Hereafter	辰砂往生录
+Echoes of an Offering	来歆余响
+Deepwood Memories	深林的记忆
+Gilded Dreams	饰金之梦
+Desert Pavilion Chronicle	沙上楼阁史话
+Flower of Paradise Lost	乐园遗落之花
+Nymph's Dream	水仙之梦
+Vourukasha's Glow	花海甘露之光
+Marechaussee Hunter	逐影猎人
+Golden Troupe	黄金剧团
+Nighttime Whispers in the Echoing Woods	回声之林夜话
+Song of Days Past	昔时之歌
+Fragment of Harmonic Whimsy	谐律异想断章
+Unfinished Reverie	未竟的遐思
+Obsidian Codex	黑曜秘典
+Scroll of the Hero of Cinder City	烬城勇者绘卷
+Dream Solvent	异梦溶媒
+Transient Resin	须臾树脂
+Hero's Wit	大英雄的经验
+Adventurer's Experience	冒险家的经验
+Wanderer's Advice	流浪者的经验
+Northlander Billet	北陆原胚
+Midlander Billet	央陆原胚
+Borderland Billet	垠土原胚
+Dust of Azoth	嬗变之尘
+Valberry	落落莓
+Windwheel Aster	风车菊
+Cecilia	塞西莉亚花
+Calla Lily	嘟嘟莲
+Small Lamp Grass	小灯草
+Wolfhook	钩钩果
+Philanemo Mushroom	慕风蘑菇
+Glaze Lily	琉璃百合
+Violetgrass	琉璃袋
+Silk Flower	霓裳花
+Cor Lapis	石珀
+Noctilucous Jade	夜泊石
+Starconch	星螺
+Jueyun Chili	绝云椒椒
+Qingxin	清心
+Sakura Bloom	绯樱绣球
+Naku Weed	鸣草
+Crystal Marrow	晶化骨髓
+Onikabuto	鬼兜虫
+Amakumo Fruit	天云草实
+Sango Pearl	珊瑚真珠
+Sea Ganoderma	海灵芝
+Rukkhashava Mushrooms	树王圣体菇
+Kalpalata Lotus	劫波莲
+Nilotpala Lotus	月莲
+Padisarah	帕蒂沙兰
+Henna Berry	赤念果
+Scarab	圣金虫
+Sand Grease Pupa	沙脂蛹
+Lumidouce Bell	柔灯铃
+Rainbow Rose	虹彩蔷薇
+Romaritime Flower	海露花
+Tourbillon Device	图比昂装置
+Common Chest	普通的宝箱
+Remarkable Chest	奇馈宝箱
+Oculus Resonance Stone	神瞳共鸣石
+Anemoculus Resonance Stone	风神瞳共鸣石
+Geoculus Resonance Stone	岩神瞳共鸣石
+Electroculus Resonance Stone	雷神瞳共鸣石
+Dendroculus Resonance Stone	草神瞳共鸣石
+Hydroculus Resonance Stone	水神瞳共鸣石
+Pyroculus Resonance Stone	火神瞳共鸣石
+Anemo Treasure Compass	风之寻宝罗盘
+Geo Treasure Compass	岩之寻宝罗盘
+Electro Treasure Compass	雷之寻宝罗盘
+Dendro Treasure Compass	草之寻宝罗盘
+Hydro Treasure Compass	水之寻宝罗盘
+Pyro Treasure Compass	火之寻宝罗盘
+Portable Waypoint	口袋锚点
+Wind Catcher	捕风瓶
+Warming Bottle	放热瓶
+NRE (Menu 30)	便携营养袋
+Domain of Forgery	炼武秘境
+Domain of Mastery	精通秘境
+Domain of Blessing	祝圣秘境
+Trounce Domain	征讨领域
+Domains of Forgery	炼武秘境
+Domains of Mastery	精通秘境
+Domains of Blessing	祝圣秘境
+Trounce Domains	征讨领域
+Ley Line Outcrops	地脉衍出
+Blossom of Wealth	藏金之花
+Blossom of Revelation	启示之花
+Realm Currency	洞天宝钱
+Realm Depot	洞天百宝
+Adeptal Energy	洞天仙力
+Trust Rank	信任等阶
+Vial of Adeptal Speed	仙速瓶
+Wind Glider	风之翼
+Sacred Sakura	神樱
+Thunder Sakura Bough	雷樱枝条
+Electrogranum	雷种子
+Four-Leaf Sigil	四叶印
+Lumenstone Adjuvant	流明石触媒
+Lumenspar	流明晶石
+Sacred Seal	圣章石
+Plume of Purifying Light	净光翎
+Tree of Dreams	梦之树
+Fountain of Lucine	露景泉
+Spirit Carp	苍灵鲤
+Rainjade Oblation	祀珑典仪
+Seelie Court	仙灵之庭
+Warming Seelie	温暖仙灵
+Windrise	风起地
+Dawn Winery	晨曦酒庄
+Springvale	清泉镇
+Wolvendom	奔狼领
+Starsnatch Cliff	摘星崖
+Cape Oath	誓言岬
+Dragonspine	龙脊雪山
+Wyrmrest Valley	眠龙谷
+Liyue Harbor	璃月港
+Wangshu Inn	望舒客栈
+Qingce Village	轻策庄
+Jueyun Karst	绝云间
+Mt. Aocang	奥藏山
+Mt. Hulao	琥牢山
+Qingyun Peak	庆云顶
+Chenyu Vale	沉玉谷
+Qiaoying Village	翘英庄
+Yilong Wharf	遗珑埠
+Guyun Stone Forest	孤云阁
+The Chasm: Underground Mines	层岩巨渊·地下矿区
+Ritou	离岛
+Narukami Island	鸣神岛
+Grand Narukami Shrine	鸣神大社
+Kamisato Estate	神里屋敷
+Watatsumi Island	海祇岛
+Sangonomiya Shrine	珊瑚宫
+Seirai Island	清籁岛
+Tsurumi Island	鹤观
+Enkanomiya	渊下宫
+Sumeru City	须弥城
+Akademiya	教令院
+Gandharva Ville	化城郭
+Port Ormos	奥摩斯港
+Vanarana	桓那兰那
+Aranyaka	森林书
+Aranara	兰那罗
+King Deshret	赤王
+The Mausoleum of King Deshret	赤王陵
+Court of Fontaine	枫丹廷
+Opera Epiclese	欧庇克莱歌剧院
+Fortress of Meropide	梅洛彼得堡
+Petrichor	佩特莉可镇
+Sea of Bygone Eras	旧日之海
+Remuria	雷穆利亚
+Stadium of the Sacred Flame	圣火竞技场
+Children of Echoes	回声之子
+Scions of the Canopy	悬木人
+People of the Springs	流泉之众
+Flower-Feather Clan	花羽会
+Masters of the Night-Wind	烟谜主
+Collective of Plenty	沃陆之邦
+Ochkanatlan	奥奇卡纳塔
+Nod-Krai	挪德卡莱
+Knights of Favonius	西风骑士团
+Favonius Cathedral	西风大教堂
+Liyue Qixing	璃月七星
+Millelith	千岩军
+Crux Fleet	南十字船队
+Tenryou Commission	天领奉行
+Kanjou Commission	勘定奉行
+Yashiro Commission	社奉行
+Shuumatsuban	终末番
+Shogunate Army	幕府军
+Eremites	镀金旅团
+Marechaussee Phantom	逐影庭
+Maison Gardiennage	执律庭
+Fatui Harbingers	愚人众执行官
+Abyss Order	深渊教团
+Abyss Mage	深渊法师
+Abyss Mages	深渊法师
+Abyss Herald	深渊使徒
+Abyss Lector	深渊咏者
+Hilichurl	丘丘人
+Hilichurls	丘丘人
+Mitachurl	丘丘暴徒
+Lawachurl	丘丘王
+Samachurl	丘丘萨满
+Treasure Hoarder	盗宝团成员
+Treasure Hoarders	盗宝团
+Ruin Guard	遗迹守卫
+Ruin Hunter	遗迹猎者
+Ruin Grader	遗迹重机
+Ruin Serpent	遗迹巨蛇
+Rifthound	兽境猎犬
+Rifthounds	兽境猎犬
+Mirror Maiden	藏镜仕女
+Fatui Skirmisher	愚人众先遣队
+Maguu Kenki	魔偶剑鬼
+Perpetual Mechanical Array	恒常机关阵列
+Primo Geovishap	古岩龙蜥
+Golden Wolflord	黄金王兽
+Thunder Manifestation	雷音权现
+Rhodeia of Loch	洛蒂娅
+Jadeplume Terrorshroom	翠翎恐蕈
+Aeonblight Drake	兆载永劫龙兽
+Algorithm of Semi-Intransient Matrix of Overseer Network	半永恒统辖矩阵
+Setekh Wenut	风蚀沙虫
+Iniquitous Baptist	深罪浸礼者
+Icewind Suite	冰风组曲
+Emperor of Fire and Iron	铁甲熔火帝皇
+Millennial Pearl Seahorse	千年珍珠骏麟
+Hydro Tulpa	水形幻人
+Solitary Suanni	隐山猊兽
+Statue of Marble and Brass	魔像督军
+Stormterror Dvalin	风魔龙·特瓦林
+Andrius	安德留斯
+Azhdaha	若陀龙王
+La Signora	女士
+All-Devouring Narwhal	吞星之鲸
+Lupus Boreas	北风的王狼
+Raiden Shogun	雷电将军
+Kamisato Ayaka	神里绫华
+Kamisato Ayato	神里绫人
+Kaedehara Kazuha	枫原万叶
+Kujou Sara	九条裟罗
+Sangonomiya Kokomi	珊瑚宫心海
+Yae Miko	八重神子
+Arataki Itto	荒泷一斗
+Kuki Shinobu	久岐忍
+Shikanoin Heizou	鹿野院平藏
+Yoimiya	宵宫
+Kirara	绮良良
+Venti	温迪
+Zhongli	钟离
+Nahida	纳西妲
+Furina	芙宁娜
+Mavuika	玛薇卡
+Neuvillette	那维莱特
+Wriothesley	莱欧斯利
+Arlecchino	阿蕾奇诺
+Clorinde	克洛琳德
+Sigewinne	希格雯
+Navia	娜维娅
+Lyney	林尼
+Lynette	琳妮特
+Freminet	菲米尼
+Xilonen	希诺宁
+Citlali	茜特菈莉
+Kinich	基尼奇
+Mualani	玛拉妮
+Kachina	卡齐娜
+Chasca	恰斯卡
+Ororon	欧洛伦
+Alhaitham	艾尔海森
+Tighnari	提纳里
+Cyno	赛诺
+Dehya	迪希雅
+Nilou	妮露
+Faruzan	珐露珊
+Kaveh	卡维
+Layla	莱依拉
+Collei	柯莱
+Sethos	赛索斯
+Xingqiu	行秋
+Xiangling	香菱
+Hu Tao	胡桃
+Xianyun	闲云
+Shenhe	申鹤
+Yelan	夜兰
+Baizhu	白术
+Qiqi	七七
+Ganyu	甘雨
+Keqing	刻晴
+Ningguang	凝光
+Beidou	北斗
+Yaoyao	瑶瑶
+Yanfei	烟绯
+Chongyun	重云
+Yun Jin	云堇
+Xinyan	辛焱
+Diluc	迪卢克
+Kaeya	凯亚
+Albedo	阿贝多
+Klee	可莉
+Sucrose	砂糖	label
+Bennett	班尼特
+Fischl	菲谢尔
+Rosaria	罗莎莉亚
+Mika	米卡
+Diona	迪奥娜
+Razor	雷泽	label
+Noelle	诺艾尔
