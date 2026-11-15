@@ -126,7 +126,16 @@ internal static class Desktop
     internal static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
+    internal static extern IntPtr WindowFromPoint(Point point);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr window, uint flags);
+
+    [DllImport("user32.dll")]
     internal static extern uint GetWindowThreadProcessId(IntPtr window, out int processId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern int GetWindowText(IntPtr window, System.Text.StringBuilder text, int capacity);
 
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int key);
@@ -163,6 +172,13 @@ internal static class Desktop
         position = info.Position;
         visible = (info.Flags & 1) != 0;
         return success;
+    }
+
+    internal static IntPtr TopLevelWindowAt(Point point)
+    {
+        const uint root = 2;
+        var window = WindowFromPoint(point);
+        return window == IntPtr.Zero ? IntPtr.Zero : GetAncestor(window, root);
     }
 
     internal static Rectangle ClientOnScreen(IntPtr window)

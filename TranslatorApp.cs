@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using Windows.Media.Ocr;
+using System.Text;
 
 namespace ScreenTranslator;
 
@@ -12,7 +12,7 @@ internal sealed class TranslatorApp : ApplicationContext
     private const int HoverDelay = 190;
     private const int MovementTolerance = 4;
     private readonly System.Windows.Forms.Timer timer = new() { Interval = StandbyInterval };
-    private readonly TermGlossary glossary = new();
+    private readonly ApplicationGlossaries glossaries = new();
     private readonly Translator translator;
     private readonly EnglishSpeech speech = new();
     private readonly TranslationPopup popup = new();
@@ -20,14 +20,19 @@ internal sealed class TranslatorApp : ApplicationContext
     private readonly Icon? appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
     private readonly ContextMenuStrip menu = new();
     private readonly ToolStripMenuItem pause = new("暂停") { CheckOnClick = true };
-    private readonly ToolStripMenuItem genshin = new("仅在原神中启用") { Checked = true, CheckOnClick = true };
+    private readonly ToolStripMenuItem supportedAppsOnly = new("仅在已适配的应用中启用") { CheckOnClick = true };
     private readonly ToolStripMenuItem paragraph = new("默认翻译段落") { CheckOnClick = true };
     private readonly ToolStripMenuItem ai = new("使用 DeepSeek 上下文翻译") { CheckOnClick = true };
+    private readonly AppSettingsStore settingsStore = AppSettingsStore.ForCurrentUser();
     private readonly string? apiKey = GetApiKey();
     private readonly ScreenOcr? ocr;
     private DemoWindow? mainWindow;
-    private IntPtr foreground;
-    private bool foregroundIsGenshin;
+    private IntPtr targetWindow;
+    private bool targetIsGenshin;
+    private bool targetIsSupported;
+    private bool targetIsDesktop;
+    private string? targetProcessName;
+    private string? targetWindowTitle;
     private bool usingParagraph;
     private bool attempted;
     private bool speechButtonWasDown;
@@ -39,26 +44,27 @@ internal sealed class TranslatorApp : ApplicationContext
     private CancellationTokenSource? pending;
     private bool busy;
     private bool exiting;
+    private AppSettings settings;
 
     public TranslatorApp()
     {
-        translator = new Translator(glossary);
+        translator = new Translator();
+        settings = settingsStore.Load();
+        pause.Checked = settings.Paused;
+        supportedAppsOnly.Checked = settings.SupportedAppsOnly;
+        paragraph.Checked = settings.DefaultParagraph;
         ai.Enabled = apiKey is not null;
+        ai.Checked = ai.Enabled && settings.UseDeepSeek;
         if (apiKey is null)
             ai.ToolTipText = "设置 SCREEN_TRANSLATOR_DEEPSEEK_API_KEY 后重启软件即可启用";
 
-        pause.CheckedChanged += (_, _) =>
-        {
-            pause.Text = pause.Checked ? "恢复翻译" : "暂停";
-            ResetHover();
-            UpdateTray();
-        };
-        genshin.CheckedChanged += (_, _) => { ResetHover(); UpdateTray(); };
-        paragraph.CheckedChanged += (_, _) => ResetHover();
-        ai.CheckedChanged += (_, _) => ResetHover();
+        pause.CheckedChanged += SettingsChanged;
+        supportedAppsOnly.CheckedChanged += SettingsChanged;
+        paragraph.CheckedChanged += SettingsChanged;
+        ai.CheckedChanged += SettingsChanged;
         menu.Opening += (_, _) => ResetHover();
         menu.Items.AddRange([new ToolStripMenuItem("打开主界面", null, (_, _) => ShowMainWindow()), new ToolStripSeparator(),
-            pause, genshin, paragraph, ai, new ToolStripSeparator(),
+            pause, supportedAppsOnly, paragraph, ai, new ToolStripSeparator(),
             new ToolStripMenuItem("退出", null, (_, _) => ExitThread())]);
 
         tray = new NotifyIcon { Icon = appIcon ?? SystemIcons.Application, ContextMenuStrip = menu, Visible = true };
@@ -121,7 +127,8 @@ internal sealed class TranslatorApp : ApplicationContext
         attempted = true;
         var hadSpeechRequest = speechRequested;
         var available = Rectangle.Intersect(Screen.FromPoint(anchor).Bounds, Desktop.ClientOnScreen(window));
-        var capture = CaptureArea(window, available, anchor, readParagraph);
+        var dpi = Desktop.GetDpiForWindow(window) / 96f;
+        var capture = HoverRecognition.CaptureArea(available, anchor, dpi, readParagraph);
         if (capture.Width < 16 || capture.Height < 12 || ocr is not { } recognizer)
         {
             speechRequested = false;
@@ -132,62 +139,26 @@ internal sealed class TranslatorApp : ApplicationContext
         using var request = new CancellationTokenSource();
         pending = request;
         var cursor = anchor;
-        var isGenshin = foregroundIsGenshin;
+        var isGenshin = targetIsGenshin;
+        var processName = targetProcessName;
+        var windowTitle = targetWindowTitle;
+        var isDemoWindow = IsMainWindow(window);
+        var isDesktop = targetIsDesktop;
         try
         {
-            var wordScale = isGenshin ? 2.4f : 2.2f;
-            var lines = await ReadAsync(capture, readParagraph ? 1.65f : wordScale);
+            var wider = readParagraph ? capture : HoverRecognition.CaptureArea(available, cursor, dpi, paragraph: false, expanded: true);
+            var (target, word, glossary) = await Task.Run(async () =>
+            {
+                var activeGlossary = glossaries.ForProcess(processName, windowTitle, isDemoWindow);
+                if (isDesktop && DesktopLabels.TryRead(cursor, out var desktopLabel))
+                    return (desktopLabel, desktopLabel, activeGlossary);
+                var result = await HoverRecognition.ReadAsync(available, capture, wider, cursor, readParagraph,
+                    isGenshin, activeGlossary, recognizer.ReadAsync, request.Token).ConfigureAwait(false);
+                return (result.Target, result.Word, activeGlossary);
+            }, request.Token);
             if (!StillHovering(request, window, cursor, readParagraph))
                 return;
-
-            var target = Select(lines);
-            if (readParagraph && target is not null)
-            {
-                var start = capture;
-                var expanded = TextSelection.ExtendParagraphCapture(capture, available, target.Bounds);
-                while (expanded != capture)
-                {
-                    var expandedLines = await ReadAsync(expanded, 1.65f);
-                    if (!StillHovering(request, window, cursor, readParagraph))
-                        return;
-                    var more = Select(expandedLines);
-                    if (more is null || !TextSelection.IncludesParagraph(more.Bounds, target.Bounds))
-                        break;
-
-                    lines = expandedLines;
-                    target = more;
-                    capture = expanded;
-                    expanded = TextSelection.ExtendParagraphCapture(capture, available, target.Bounds);
-                }
-
-                if (capture != start && target.Bounds.Height >= start.Height * 0.65f)
-                {
-                    // Larger book paragraphs get a tight, native-resolution pass. At native scale,
-                    // punctuation and thin serifs are less likely to be smoothed out.
-                    var detail = TextSelection.ParagraphDetailArea(capture, target.Bounds);
-                    var detailLines = await ReadAsync(detail, 1f, useGamePreprocessing: false);
-                    if (!StillHovering(request, window, cursor, readParagraph))
-                        return;
-                    if (Select(detailLines) is { } refined && TextSelection.PreservesParagraph(refined, target))
-                    {
-                        lines = detailLines;
-                        target = refined;
-                    }
-                }
-            }
-            if (!readParagraph && target is not null)
-            {
-                var wider = CaptureArea(window, available, cursor, paragraph: false, expanded: true);
-                if (wider != capture && MightBeClipped(target.Bounds, capture, wider))
-                {
-                    var retry = await ReadAsync(wider, wordScale);
-                    if (!StillHovering(request, window, cursor, readParagraph))
-                        return;
-                    target = Select(retry) ?? target;
-                }
-            }
-            var word = readParagraph ? TextSelection.At(lines, cursor, false, isGenshin ? glossary : null) : target;
-            hoverEnglish = word is null ? null : isGenshin ? glossary.CorrectOcr(word.Text) : word.Text;
+            hoverEnglish = word is null ? null : glossary?.CorrectOcr(word.Text) ?? word.Text;
             if (speechRequested)
             {
                 speechRequested = false;
@@ -197,37 +168,29 @@ internal sealed class TranslatorApp : ApplicationContext
 
             if (target is null)
                 return;
-            if (isGenshin)
+            if (glossary is not null)
                 target = target with { Text = glossary.CorrectOcr(target.Text), Context = glossary.CorrectOcr(target.Context) };
 
-            var operation = translator.TranslateAsync(target, readParagraph, isGenshin, ai.Checked ? apiKey : null, request.Token);
+            var operation = translator.TranslateAsync(target, readParagraph, glossary, ai.Checked ? apiKey : null, request.Token);
             if (!operation.IsCompleted)
             {
                 // Only show loading feedback when the network takes long enough to notice.
                 await Task.WhenAny(operation, Task.Delay(230, request.Token));
                 if (!operation.IsCompleted && StillHovering(request, window, cursor, readParagraph))
-                    popup.Present(target.Text, "正在翻译…", null, target.Bounds, cursor);
+                    popup.Present(target.Text, "正在翻译…", null, target.Bounds, cursor, window);
             }
 
             var translated = await operation;
             if (StillHovering(request, window, cursor, readParagraph))
-                popup.Present(target.Text, translated.Text, translated.Source, target.Bounds, cursor);
+                popup.Present(target.Text, translated.Text, translated.Source, target.Bounds, cursor, window);
 
-            Selection? Select(ScreenLine[] recognized) => TextSelection.At(recognized, cursor, readParagraph, isGenshin ? glossary : null);
-
-            Task<ScreenLine[]> ReadAsync(Rectangle area, float preferredScale, bool useGamePreprocessing = true)
-            {
-                var scale = Math.Min(preferredScale, (float)OcrEngine.MaxImageDimension / Math.Max(area.Width, area.Height));
-                return Task.Run(() => recognizer.ReadAsync(area, scale, cursor,
-                    isGenshin && useGamePreprocessing ? recognized => Select(recognized) is not null : null, request.Token), request.Token);
-            }
         }
         catch (Exception error) when (Translator.IsServiceError(error) || error is Win32Exception or ExternalException)
         {
             if (StillHovering(request, window, cursor, readParagraph))
             {
                 var message = error is ExternalException or Win32Exception ? "读取屏幕失败" : "联网翻译暂不可用，请检查连接后重试";
-                popup.Present("", message, null, RectangleF.Empty, cursor);
+                popup.Present("", message, null, RectangleF.Empty, cursor, window);
             }
         }
         finally
@@ -247,24 +210,36 @@ internal sealed class TranslatorApp : ApplicationContext
 
     private bool TryHover(out IntPtr window, out Point point, out bool readParagraph)
     {
-        window = Desktop.GetForegroundWindow();
+        window = IntPtr.Zero;
         point = default;
         readParagraph = false;
-        if (exiting || pause.Checked || ocr is null || menu.Visible || window == IntPtr.Zero)
+        if (exiting || pause.Checked || ocr is null || menu.Visible
+            || !Desktop.TryCursor(out point, out var visible)
+            || Desktop.IsDown(Desktop.LeftMouse) || Desktop.IsDown(Desktop.RightMouse))
             return false;
-        if (window != foreground)
+        if (!visible && !Desktop.IsDown(Desktop.LeftAlt))
+            return false;
+
+        window = supportedAppsOnly.Checked || !visible ? Desktop.GetForegroundWindow() : Desktop.TopLevelWindowAt(point);
+        if (window == IntPtr.Zero || !Desktop.ClientOnScreen(window).Contains(point))
+            return false;
+        if (window != targetWindow)
         {
-            foreground = window;
-            foregroundIsGenshin = IsGenshin(window);
+            targetWindow = window;
+            targetProcessName = WindowProcessName(window);
+            targetWindowTitle = null;
+            if (ApplicationGlossaries.IsJava(targetProcessName))
+            {
+                var title = new StringBuilder(256);
+                Desktop.GetWindowText(window, title, title.Capacity);
+                targetWindowTitle = title.ToString();
+            }
+            targetIsGenshin = glossaries.IsGenshin(targetProcessName);
+            targetIsSupported = glossaries.IsSupported(targetProcessName, targetWindowTitle);
+            targetIsDesktop = DesktopLabels.IsDesktopWindow(window);
             ResetHover();
         }
-        if (genshin.Checked && !foregroundIsGenshin && !IsMainWindow(window))
-            return false;
-        if (!Desktop.TryCursor(out point, out var visible) || (!visible && !(foregroundIsGenshin && Desktop.IsDown(Desktop.LeftAlt))))
-            return false;
-        if (Desktop.IsDown(Desktop.LeftMouse) || Desktop.IsDown(Desktop.RightMouse))
-            return false;
-        if (!Desktop.ClientOnScreen(window).Contains(point))
+        if ((!visible && !targetIsGenshin) || (supportedAppsOnly.Checked && !targetIsSupported && !IsMainWindow(window)))
             return false;
 
         var sideButtonDown = Desktop.IsDown(Desktop.MouseSide1);
@@ -278,52 +253,25 @@ internal sealed class TranslatorApp : ApplicationContext
 
     private bool IsMainWindow(IntPtr window) => mainWindow is { IsHandleCreated: true } && window == mainWindow.Handle;
 
-    private static bool IsGenshin(IntPtr window)
+    private static string? WindowProcessName(IntPtr window)
     {
         Desktop.GetWindowThreadProcessId(window, out var id);
         if (id <= 0)
-            return false;
+            return null;
 
         try
         {
             using var process = Process.GetProcessById(id);
-            return process.ProcessName.Equals("GenshinImpact", StringComparison.OrdinalIgnoreCase)
-                || process.ProcessName.Equals("YuanShen", StringComparison.OrdinalIgnoreCase);
+            return process.ProcessName;
         }
         catch (Exception error) when (error is ArgumentException or InvalidOperationException or Win32Exception)
         {
-            return false;
+            return null;
         }
     }
 
     private static bool HasMoved(Point point, Point origin) =>
         Math.Abs(point.X - origin.X) > MovementTolerance || Math.Abs(point.Y - origin.Y) > MovementTolerance;
-
-    private static Rectangle CaptureArea(IntPtr window, Rectangle area, Point point, bool paragraph, bool expanded = false)
-    {
-        if (area.IsEmpty)
-            return area;
-
-        var dpi = Math.Clamp(Desktop.GetDpiForWindow(window) / 96f, 1, 2.5f);
-        dpi = Math.Max(dpi, Math.Clamp(area.Width / 1920f, 1, 2.5f));
-        var halfHeight = (int)((paragraph ? 170 : expanded ? 100 : 55) * dpi);
-        var halfWidth = (int)((expanded ? 570 : 330) * dpi);
-        var step = (int)(24 * dpi);
-        var center = area.Top + (point.Y - area.Top) / step * step + step / 2;
-        var band = paragraph
-            ? new Rectangle(area.Left, center - halfHeight, area.Width, halfHeight * 2)
-            : new Rectangle(point.X - halfWidth, point.Y - halfHeight, halfWidth * 2, halfHeight * 2);
-        return Rectangle.Intersect(area, band);
-    }
-
-    private static bool MightBeClipped(RectangleF word, Rectangle capture, Rectangle wider)
-    {
-        var margin = Math.Clamp(word.Height * 0.3f, 3f, 12f);
-        return (wider.Left < capture.Left && word.Left - capture.Left <= margin)
-            || (wider.Right > capture.Right && capture.Right - word.Right <= margin)
-            || (wider.Top < capture.Top && word.Top - capture.Top <= margin)
-            || (wider.Bottom > capture.Bottom && capture.Bottom - word.Bottom <= margin);
-    }
 
     private void ResetHover()
     {
@@ -336,6 +284,16 @@ internal sealed class TranslatorApp : ApplicationContext
     }
 
     private void UpdateTray() => tray.Text = pause.Checked ? "屏幕翻译 · 已暂停" : "屏幕翻译";
+
+    private void SettingsChanged(object? sender, EventArgs args)
+    {
+        ResetHover();
+        UpdateTray();
+        settings = new AppSettings(supportedAppsOnly.Checked, paragraph.Checked, pause.Checked,
+            ai.Enabled ? ai.Checked : settings.UseDeepSeek);
+        if (!settingsStore.Save(settings))
+            tray.ShowBalloonTip(4000, "设置保存失败", "请检查本地应用数据目录是否可写。", ToolTipIcon.Warning);
+    }
 
     private static string? GetApiKey() => (Environment.GetEnvironmentVariable("SCREEN_TRANSLATOR_DEEPSEEK_API_KEY")
         ?? Environment.GetEnvironmentVariable("SCREEN_TRANSLATOR_DEEPSEEK_API_KEY", EnvironmentVariableTarget.User))
@@ -361,6 +319,7 @@ internal sealed class TranslatorApp : ApplicationContext
             menu.Dispose();
             popup.Dispose();
             speech.Dispose();
+            ocr?.Dispose();
             translator.Dispose();
         }
         base.Dispose(disposing);

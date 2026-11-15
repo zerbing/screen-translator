@@ -6,13 +6,16 @@
     <ApplicationIcon>ScreenTranslator.ico</ApplicationIcon>
     <AssemblyTitle>屏幕翻译</AssemblyTitle>
     <Product>屏幕翻译</Product>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="GenshinTerms.tsv" />
-    <EmbeddedResource Include="GenshinDictionaryTerms.tsv" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
+    <EmbeddedResource Include="Glossaries/*.tsv" LogicalName="ScreenTranslator.Glossaries.%(Filename)%(Extension)" />
+    <Compile Remove="tests/**/*.cs" />
+    <InternalsVisibleTo Include="ScreenTranslator.Regression" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,31 @@
+# Visual Studio EN → zh-CN terminology
+Solution Explorer	解决方案资源管理器
+Error List	错误列表
+Object Browser	对象浏览器
+Package Manager Console	程序包管理器控制台
+Manage NuGet Packages	管理 NuGet 程序包
+Build Solution	生成解决方案
+Rebuild Solution	重新生成解决方案
+Clean Solution	清理解决方案
+Configuration Manager	配置管理器
+Startup Project	启动项目
+Attach to Process	附加到进程
+Call Stack	调用堆栈
+Exception Settings	异常设置
+Immediate Window	即时窗口
+Watch Window	监视窗口
+Test Explorer	测试资源管理器
+Code Coverage	代码覆盖率
+Code Lens	CodeLens
+Quick Actions	快速操作
+Light Bulb	灯泡
+Go to Definition	转到定义
+Find All References	查找所有引用
+Hot Reload	热重载
+Diagnostic Tools	诊断工具
+Performance Profiler	性能探查器
+Thread Window	线程窗口
+Breakpoints	断点
+Step Into	逐语句
+Step Over	逐过程
+Step Out	跳出

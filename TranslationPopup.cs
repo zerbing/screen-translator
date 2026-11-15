@@ -52,17 +52,17 @@ internal sealed class TranslationPopup : Form
         }
     }
 
-    public void Present(string original, string translation, string? provider, RectangleF target, Point cursor)
+    public void Present(string original, string translation, string? provider, RectangleF target, Point cursor, IntPtr targetWindow)
     {
         english = original;
         chinese = translation;
         source = provider;
         var screen = Screen.FromPoint(cursor).WorkingArea;
-        var dpi = Math.Clamp(Desktop.GetDpiForWindow(Desktop.GetForegroundWindow()) / 96f, 1, 3);
+        var dpi = Math.Clamp(Desktop.GetDpiForWindow(targetWindow) / 96f, 1, 3);
         var pad = (int)(15 * dpi);
         var preferredWidth = chinese.Length > 180 ? 680 : 455;
         var maxWidth = Math.Max(100, Math.Min((int)(preferredWidth * dpi), screen.Width - pad * 4));
-        using var graphics = Graphics.FromHwnd(Desktop.GetForegroundWindow());
+        using var graphics = Graphics.FromHwnd(targetWindow);
         var body = TextRenderer.MeasureText(graphics, chinese, bodyFont, new Size(maxWidth, int.MaxValue), TextFlags);
         var caption = TextRenderer.MeasureText(graphics, english, subFont, new Size(maxWidth, int.MaxValue), TextFlags);
         var footer = TextRenderer.MeasureText(graphics, source ?? "", subFont, new Size(maxWidth, int.MaxValue), TextFlags);

@@ -1,0 +1,38 @@
+# Blender EN → zh-CN terminology
+Object Mode	物体模式
+Edit Mode	编辑模式
+Sculpt Mode	雕刻模式
+Pose Mode	姿态模式
+Weight Paint	权重绘制
+Vertex Paint	顶点绘制
+Texture Paint	纹理绘制
+Subdivision Surface	表面细分
+Loop Cut	环切
+Inset Faces	内插面
+Extrude Region	挤出区域
+Proportional Editing	衰减编辑
+Vertex Group	顶点组
+Shape Keys	形态键
+Shade Smooth	平滑着色
+Flat Shading	平直着色
+Geometry Nodes	几何节点
+Shader Editor	着色器编辑器
+UV Editor	UV 编辑器
+UV Unwrap	UV 展开
+Mark Seam	标记缝合边
+Inverse Kinematics	反向运动学
+Armature	骨架
+Keyframe	关键帧
+Dope Sheet	动画摄影表
+Graph Editor	曲线编辑器
+Compositor	合成器
+View Layer	视图层
+Render Pass	渲染通道
+Ambient Occlusion	环境光遮蔽
+Depth of Field	景深
+Motion Blur	运动模糊
+Array Modifier	阵列修改器
+Bevel Modifier	倒角修改器
+Mirror Modifier	镜像修改器
+Decimate Modifier	精简修改器
+Outliner	大纲视图

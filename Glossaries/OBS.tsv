@@ -1,0 +1,31 @@
+# OBS Studio EN → zh-CN terminology
+Studio Mode	工作室模式
+Scene Collection	场景集合
+Scene Transition	场景转场
+Display Capture	显示器采集
+Window Capture	窗口采集
+Game Capture	游戏采集
+Audio Input Capture	音频输入采集
+Audio Output Capture	音频输出采集
+Video Capture Device	视频采集设备
+Browser Source	浏览器源
+Media Source	媒体源
+Audio Mixer	混音器
+Advanced Audio Properties	高级音频属性
+Noise Suppression	噪声抑制
+Noise Gate	噪声门
+Compressor	压缩器
+Limiter	限制器
+Expander	扩展器
+Chroma Key	色度键
+Color Key	色彩键
+Luma Key	亮度键
+Replay Buffer	回放缓存
+Stream Key	串流密钥
+Start Streaming	开始直播
+Start Recording	开始录制
+Remux Recordings	录像转封装
+Virtual Camera	虚拟摄像机
+Dropped Frames	丢帧
+Bitrate	码率
+Keyframe Interval	关键帧间隔

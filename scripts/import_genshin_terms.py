@@ -49,7 +49,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("snapshot", type=Path)
     args = parser.parse_args()
-    folder = Path(__file__).resolve().parent
+    folder = Path(__file__).resolve().parents[1] / "Glossaries"
     used = {
         row.split("\t")[0].casefold()
         for row in (folder / "GenshinTerms.tsv").read_text(encoding="utf-8-sig").splitlines()

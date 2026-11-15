@@ -1,0 +1,31 @@
+# Power BI EN → zh-CN terminology
+Measure	度量值
+Calculated Column	计算列
+Calculated Table	计算表
+Data Model	数据模型
+Model View	模型视图
+Report View	报表视图
+Semantic Model	语义模型
+Data Analysis Expressions	数据分析表达式
+Row Context	行上下文
+Filter Context	筛选器上下文
+Row-Level Security	行级别安全性
+Cross-filter Direction	交叉筛选方向
+DirectQuery	DirectQuery
+Power Query Editor	Power Query 编辑器
+Applied Steps	应用的步骤
+Query Folding	查询折叠
+Incremental Refresh	增量刷新
+Slicer	切片器
+Drillthrough	钻取
+Drill Down	向下钻取
+Key Influencers	关键影响因素
+Decomposition Tree	分解树
+Data Gateway	数据网关
+Bookmark	书签
+Relationship	关系
+Many-to-many	多对多
+One-to-many	一对多
+Conditional Formatting	条件格式
+Field Parameter	字段参数
+Calculation Group	计算组

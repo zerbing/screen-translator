@@ -1,0 +1,37 @@
+# VS Code EN → zh-CN terminology
+Command Palette	命令面板
+Activity Bar	活动栏
+Status Bar	状态栏
+Primary Side Bar	主侧边栏
+Secondary Side Bar	辅助侧边栏
+Source Control	源代码管理
+Integrated Terminal	集成终端
+Run and Debug	运行和调试
+Breakpoints	断点
+Watch Expression	监视表达式
+Call Stack	调用堆栈
+Step Into	单步进入
+Step Over	单步跳过
+Step Out	单步跳出
+Go to Definition	转到定义
+Go to References	转到引用
+Peek Definition	速览定义
+Rename Symbol	重命名符号
+Format Document	格式化文档
+Format Selection	格式化选定内容
+Code Actions	代码操作
+Quick Fix	快速修复
+Workspace Trust	工作区信任
+Restricted Mode	受限模式
+Multi-root Workspace	多根工作区
+Extension Host	扩展宿主
+Dev Container	开发容器
+Settings Sync	设置同步
+User Settings	用户设置
+Workspace Settings	工作区设置
+Keyboard Shortcuts	键盘快捷方式
+Zen Mode	禅模式
+Word Wrap	自动换行
+Sticky Scroll	粘滞滚动
+Command Line Interface	命令行界面
+Inline Suggestions	内联建议

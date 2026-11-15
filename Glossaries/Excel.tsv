@@ -1,0 +1,47 @@
+# Excel EN → zh-CN terminology
+PivotTable	数据透视表
+Pivot Table	数据透视表
+PivotChart	数据透视图
+Slicer	切片器
+Conditional Formatting	条件格式
+Data Validation	数据验证
+Named Range	命名区域
+Name Manager	名称管理器
+Freeze Panes	冻结窗格
+Freeze Top Row	冻结首行
+Freeze First Column	冻结首列
+Text to Columns	分列
+Flash Fill	快速填充
+Fill Handle	填充柄
+Formula Bar	编辑栏
+Cell Reference	单元格引用
+Absolute Reference	绝对引用
+Relative Reference	相对引用
+Mixed Reference	混合引用
+Circular Reference	循环引用
+Goal Seek	单变量求解
+What-If Analysis	模拟分析
+Scenario Manager	方案管理器
+Data Table	数据表
+Workbook	工作簿
+Worksheet	工作表
+Sheet View	工作表视图
+Merge and Center	合并后居中
+Wrap Text	自动换行
+Remove Duplicates	删除重复项
+Protect Sheet	保护工作表
+Print Area	打印区域
+Page Break Preview	分页预览
+Power Query	Power Query
+Get & Transform Data	获取和转换数据
+Data Model	数据模型
+Structured Reference	结构化引用
+Spill Range	溢出区域
+Dynamic Array	动态数组
+Calculated Column	计算列
+Trace Precedents	追踪引用单元格
+Trace Dependents	追踪从属单元格
+Evaluate Formula	公式求值
+Formula Auditing	公式审核
+Subtotal	分类汇总
+External References	外部引用
