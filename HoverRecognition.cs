@@ -6,18 +6,34 @@ internal static class HoverRecognition
 {
     internal delegate Task<ScreenLine[]> ReadRegion(Rectangle area, float scale, Point cursor,
         Func<ScreenLine[], bool>? hasTarget, CancellationToken token, bool allowMixedText, bool largeDisplayOnly, bool paragraph);
+    internal delegate Task<ScreenLine[]?> ReadOptionRegion(Rectangle area, Point cursor, CancellationToken token);
 
     public static async Task<(Selection? Target, Selection? Word)> ReadAsync(Rectangle available,
         Rectangle capture, Rectangle wider, Point cursor, bool paragraph, bool useGamePreprocessing,
-        TermGlossary? glossary, ReadRegion readRegion, CancellationToken token)
+        TermGlossary? glossary, ReadRegion readRegion, CancellationToken token, ReadOptionRegion? readOption = null)
     {
         var wordScale = useGamePreprocessing ? 2.4f : 2.2f;
         var lines = await Read(capture, paragraph ? 1.65f : wordScale).ConfigureAwait(false);
         var target = Select(lines);
+        if (!paragraph && readOption is not null && (capture.Left > available.Left || capture.Right < available.Right)
+            && (target is null || lines.Any(line => line.Bounds.Height >= 17
+                && RectangleF.Inflate(line.Bounds, 15, 12).Contains(cursor))))
+        {
+            var band = Rectangle.FromLTRB(available.Left, wider.Top, available.Right, wider.Bottom);
+            if (await readOption(band, cursor, token).ConfigureAwait(false) is { } option)
+            {
+                var wordInOption = Select(option);
+                if (option.Length == 0 || wordInOption is not null)
+                    return (wordInOption, wordInOption);
+            }
+        }
         if (paragraph && target is not null)
         {
             var start = capture;
-            var expanded = TextSelection.ExtendParagraphCapture(capture, available, target.Bounds);
+            var lineHeight = target.Text.Contains('\n')
+                ? lines.Where(line => line.Bounds.IntersectsWith(target.Bounds)).Select(line => line.Bounds.Height).DefaultIfEmpty().Max()
+                : 0;
+            var expanded = TextSelection.ExtendParagraphCapture(capture, available, target.Bounds, lineHeight);
             while (expanded != capture)
             {
                 var expandedLines = await Read(expanded, 1.65f).ConfigureAwait(false);
@@ -28,7 +44,7 @@ internal static class HoverRecognition
                 lines = expandedLines;
                 target = more;
                 capture = expanded;
-                expanded = TextSelection.ExtendParagraphCapture(capture, available, target.Bounds);
+                expanded = TextSelection.ExtendParagraphCapture(capture, available, target.Bounds, lineHeight);
             }
 
             if (capture != start && target.Bounds.Height >= start.Height * 0.65f)
@@ -60,6 +76,13 @@ internal static class HoverRecognition
                         && retry.Text.StartsWith(target.Text, StringComparison.OrdinalIgnoreCase)))
                     target = retry;
             }
+        }
+        if (!paragraph && !useGamePreprocessing && target is null && lines.Length == 0 && wider != capture)
+        {
+            // A mixed-language run can disappear entirely if the crop cuts off its neighboring glyphs.
+            var retry = Select(await Read(wider, wordScale).ConfigureAwait(false));
+            if (retry is not null && retry.Bounds.Contains(cursor))
+                target = retry;
         }
 
         var word = paragraph ? TextSelection.At(lines, cursor, false, glossary) : target;

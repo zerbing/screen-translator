@@ -20,6 +20,8 @@ internal sealed class DemoWindow : Form
         ClientSize = new Size((int)(680 * scale), (int)(350 * scale));
 
         AddLabel(this, "屏幕翻译", 32, 25, 22, Ink, FontStyle.Bold);
+        var version = AddLabel(this, $"v{Application.ProductVersion.Split('+', 2)[0]}", 0, 35, 10, Muted);
+        version.Left = ClientSize.Width - (int)(32 * scale) - version.PreferredWidth;
         AddLabel(this, "悬停查词或词组，侧键 1 / 右 Ctrl 翻译段落，侧键 2 / 右 Shift 朗读英文", 34, 76, 10.5f, Muted);
 
         var sample = new Panel
@@ -49,7 +51,7 @@ internal sealed class DemoWindow : Form
         Controls.Add(settings);
     }
 
-    private void AddLabel(Control parent, string text, int x, int y, float size, Color color,
+    private Label AddLabel(Control parent, string text, int x, int y, float size, Color color,
         FontStyle style = FontStyle.Regular, string family = "Microsoft YaHei UI")
     {
         var font = new Font(family, size, style);
@@ -64,5 +66,6 @@ internal sealed class DemoWindow : Form
         };
         label.Disposed += (_, _) => font.Dispose();
         parent.Controls.Add(label);
+        return label;
     }
 }

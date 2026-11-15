@@ -225,11 +225,27 @@ internal sealed partial class Translator : IDisposable
         directHttp.DefaultRequestHeaders.UserAgent.ParseAdd("ScreenTranslator/1.0");
     }
 
+    public string? FindPronunciation(string text) => dictionary.FindPronunciation(text);
+
     public async Task<TranslationResult> TranslateAsync(Selection selection, bool paragraph, TermGlossary? glossary,
         string? apiKey, CancellationToken token, BaiduCredentials? baidu = null, OnlineEngine engine = OnlineEngine.Automatic)
     {
         if (selection.Term is { } term)
             return new TranslationResult(term, selection.TermSource);
+        if (paragraph && selection.Text.Contains('\n'))
+        {
+            var rows = selection.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (rows.Length >= 2)
+            {
+                var items = new List<TranslationResult>(rows.Length);
+                foreach (var batch in rows.Chunk(3))
+                    items.AddRange(await Task.WhenAll(batch.Select(TranslateItemAsync)));
+                var sources = items.Select(item => item.Source).OfType<string>().Distinct(StringComparer.Ordinal);
+                var source = string.Join(" · ", sources);
+                return new TranslationResult(string.Join('\n', items.Select(item => item.Text)),
+                    source.Length == 0 ? null : source, items.Any(item => item.TermsMayBeMissing));
+            }
+        }
         if (paragraph && glossary is not null && glossary.FindParagraphLabel(selection.Text) is { } label)
             return new TranslationResult(label, glossary.Source);
 
@@ -265,6 +281,17 @@ internal sealed partial class Translator : IDisposable
         if (!result.TermsMayBeMissing)
             await cache.StoreAsync(key, result);
         return result;
+
+        async Task<TranslationResult> TranslateItemAsync(string item)
+        {
+            token.ThrowIfCancellationRequested();
+            var (prefix, body) = TextSelection.ListItemParts(item);
+            if (body.Length == 0)
+                return new TranslationResult(prefix);
+            var translated = await TranslateAsync(selection with { Text = body, Context = body }, true,
+                glossary, apiKey, token, baidu, engine);
+            return translated with { Text = prefix + translated.Text };
+        }
     }
 
     [GeneratedRegex(@"\s+")]

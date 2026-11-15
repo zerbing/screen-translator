@@ -31,6 +31,12 @@ internal sealed partial class ScreenOcr : IDisposable
     [GeneratedRegex(@"\bScreenTrans[1Il]ator\s*[.．·]\s*exe(?:[oO0](?=\s|$))?(?![A-Za-z0-9])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex AppFileName();
 
+    [GeneratedRegex(@"^[A-Za-z]{3,}/[A-Za-z]{3,}$", RegexOptions.CultureInvariant)]
+    private static partial Regex SlashSeparatedWords();
+
+    [GeneratedRegex(@"^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+$", RegexOptions.CultureInvariant)]
+    private static partial Regex HyphenatedWord();
+
     public static ScreenOcr? Create()
     {
         var english = OcrEngine.AvailableRecognizerLanguages.FirstOrDefault(language =>
@@ -54,17 +60,45 @@ internal sealed partial class ScreenOcr : IDisposable
     public async Task<ScreenLine[]> ReadAsync(Rectangle area, float scale, Point cursor,
         Func<ScreenLine[], bool>? hasTarget, CancellationToken token, bool allowMixedText, bool largeDisplayOnly, bool paragraph)
     {
-        token.ThrowIfCancellationRequested();
-        using var hdr = hdrCapture.TryRead(area, token);
-        if (hdr is not null)
-            return await ReadBitmapAsync(hdr, area.Location, scale, cursor, hasTarget, token, allowMixedText, largeDisplayOnly, paragraph)
-                .ConfigureAwait(false);
-
-        using var original = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppArgb);
-        using (var graphics = Graphics.FromImage(original))
-            graphics.CopyFromScreen(area.Location, Point.Empty, area.Size, CopyPixelOperation.SourceCopy);
-        return await ReadBitmapAsync(original, area.Location, scale, cursor, hasTarget, token, allowMixedText, largeDisplayOnly, paragraph)
+        using var bitmap = Capture(area, token);
+        return await ReadBitmapAsync(bitmap, area.Location, scale, cursor, hasTarget, token, allowMixedText, largeDisplayOnly, paragraph)
             .ConfigureAwait(false);
+    }
+
+    public async Task<ScreenLine[]?> ReadOptionAsync(Rectangle area, Point cursor, CancellationToken token)
+    {
+        using var bitmap = Capture(area, token);
+        return await ReadOptionBitmapAsync(bitmap, area.Location, cursor, token).ConfigureAwait(false);
+    }
+
+    private Bitmap Capture(Rectangle area, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (hdrCapture.TryRead(area, token) is { } hdr)
+            return hdr;
+        var original = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppArgb);
+        try
+        {
+            using var graphics = Graphics.FromImage(original);
+            graphics.CopyFromScreen(area.Location, Point.Empty, area.Size, CopyPixelOperation.SourceCopy);
+            return original;
+        }
+        catch
+        {
+            original.Dispose();
+            throw;
+        }
+    }
+
+    internal async Task<ScreenLine[]?> ReadOptionBitmapAsync(Bitmap original, Point origin, Point cursor, CancellationToken token)
+    {
+        var local = new Point(cursor.X - origin.X, cursor.Y - origin.Y);
+        if (FindDialogueOption(original, local) is not { } option)
+            return null;
+        if (option.Bounds.Width == 0 || local.X < option.Bounds.Left)
+            return [];
+        var rows = await ReadOptionTextAsync(original, origin, option, token).ConfigureAwait(false);
+        return rows.Length == 0 ? null : rows;
     }
 
     internal async Task<ScreenLine[]> ReadBitmapAsync(Bitmap original, Point origin, float scale,
@@ -76,17 +110,20 @@ internal sealed partial class ScreenOcr : IDisposable
             return await ReadDisplayLabelAsync(original, origin, local, cursor, null, token, largeDisplayOnly: true)
                 .ConfigureAwait(false) ?? [];
 
-        if (hasTarget is not null && HasMapLabelColors(original, local))
+        var largeMapLabels = paragraph ? original.Width > 3840 : original.Height > 230;
+        if (hasTarget is not null && (HasMapLabelColors(original, local)
+            || largeMapLabels && HasMapLabelColors(original, local, 64)))
         {
-            var radius = Math.Clamp(original.Width / 2, 330, 650);
-            var halfHeight = Math.Clamp(original.Width / 8, 75, 116);
+            var radius = Math.Clamp(original.Width / 2, 330, largeMapLabels ? 1000 : 650);
+            var halfHeight = largeMapLabels ? 144 : Math.Clamp(original.Width / 8, 75, 116);
             var region = Rectangle.Intersect(new Rectangle(Point.Empty, original.Size),
                 new Rectangle(local.X - radius, local.Y - halfHeight, 2 * radius, 2 * halfHeight));
             using var patch = original.Clone(region, PixelFormat.Format32bppArgb);
             using var muted = LightTextMask(patch, 145, token, spread: 9);
             var patchOrigin = new Point(origin.X + region.X, origin.Y + region.Y);
             // Preserve the label's geometry when a map symbol overlaps the glyphs.
-            var mapRows = await RecognizeBitmapAsync(muted, patchOrigin, scale < 1.1f ? 1.35f : 1.85f, token).ConfigureAwait(false);
+            var mapScale = largeMapLabels ? .85f : scale < 1.1f ? 1.35f : 1.85f;
+            var mapRows = await RecognizeBitmapAsync(muted, patchOrigin, mapScale, token).ConfigureAwait(false);
             var label = GenshinMapLabels.At(mapRows, cursor);
             if (label is null)
             {
@@ -132,6 +169,31 @@ internal sealed partial class ScreenOcr : IDisposable
                 return [label];
         }
 
+        if (paragraph && hasTarget is not null && HasMixedBrightText(original, local, cyanOnly: true))
+        {
+            // Preserve saturated lettering alongside the pale text on the same lines.
+            using var mask = ConvertPixels(original, token, (red, green, blue) =>
+                IsPale(red, green, blue, 220, 28) || IsBrightCyan(red, green, blue) ? (byte)0 : (byte)255);
+            var rows = await RecognizeBitmapAsync(mask, origin, scale, token).ConfigureAwait(false);
+            if (TextSelection.At(rows, cursor, true, null) is { } candidate
+                && HasCyanEmphasis(original, origin, candidate.Bounds, rows))
+            {
+                if (candidate.Bounds.Height > 300)
+                {
+                    var detail = TextSelection.ParagraphDetailArea(new Rectangle(origin, mask.Size), candidate.Bounds);
+                    using var focused = mask.Clone(new Rectangle(detail.X - origin.X, detail.Y - origin.Y,
+                        detail.Width, detail.Height), PixelFormat.Format32bppArgb);
+                    var detailScale = Math.Min(.8f, (float)OcrEngine.MaxImageDimension / Math.Max(detail.Width, detail.Height));
+                    var refined = await RecognizeBitmapAsync(focused, detail.Location, detailScale, token).ConfigureAwait(false);
+                    if (TextSelection.At(refined, cursor, true, null) is { } reread
+                        && TextSelection.PreservesParagraph(reread, candidate)
+                        && reread.Text.Where(char.IsLetterOrDigit).SequenceEqual(candidate.Text.Where(char.IsLetterOrDigit)))
+                        rows = refined;
+                }
+                return await RefineGameTextAsync(rows).ConfigureAwait(false);
+            }
+        }
+
         if (hasTarget is not null)
         {
             var sample = SampleLetteringColor(original, local);
@@ -162,8 +224,43 @@ internal sealed partial class ScreenOcr : IDisposable
         using var boosted = luminance is null ? null : BoostFaintText(original, luminance, token);
         var wordImage = boosted ?? original;
         var originalLines = await RecognizeBitmapAsync(wordImage, origin, scale, token).ConfigureAwait(false);
+        if (await ReadDialogueOptionAsync(originalLines).ConfigureAwait(false) is { } recognizedOption)
+            return recognizedOption;
         if (allowMixedText)
         {
+            if (mixedLanguageEngine.Value is { } bilingual)
+            {
+                var surroundings = SampleLuminance(original, local, 64, 40);
+                using var recovered = BoostFaintText(original, surroundings, token, compressedHighlights: true);
+                using var widerContrast = recovered is null && boosted is null
+                    ? BoostFaintText(original, surroundings, token) : null;
+                var compound = (recovered ?? boosted ?? widerContrast) is { } faint
+                    ? await ReadFaintCompoundAsync(faint, origin, cursor, bilingual, token).ConfigureAwait(false) : null;
+                var reading = compound is null ? null : TextSelection.At(compound, cursor, false, null)?.Text;
+                var ambiguousStroke = reading is null ? -1 : InternalCapitalI(reading);
+                if (compound is not null && ambiguousStroke < 0)
+                    return compound;
+
+                // Keep the first reading unless a second pass isolates the same letters with a lowercase l.
+                var expectedReading = reading is null ? null : reading[..ambiguousStroke] + 'l' + reading[(ambiguousStroke + 1)..];
+                bool AcceptRefinedWord(string text) => expectedReading is null ? InternalCapitalI(text) < 0 : text == expectedReading;
+                using var alternative = BoostFaintText(original, surroundings, token, compressedHighlights: true,
+                    sparseInk: true, transfer: (52, 0));
+                var sharper = alternative is null ? null : await ReadFaintCompoundAsync(alternative, origin, cursor,
+                    bilingual, token, acceptWord: AcceptRefinedWord).ConfigureAwait(false);
+                if (sharper is not null && reading is not null)
+                    return sharper;
+
+                using var subtle = BoostFaintText(original, surroundings, token, compressedHighlights: true, sparseInk: true);
+                var softer = subtle is null ? null : await ReadFaintCompoundAsync(subtle, origin, cursor,
+                    bilingual, token, smallText: true, acceptWord: AcceptRefinedWord).ConfigureAwait(false);
+                if (softer is not null && (sharper is null || ExtendsFaintCompound(sharper, softer)))
+                    return softer;
+                if (sharper is not null)
+                    return sharper;
+                if (compound is not null)
+                    return compound;
+            }
             var radius = Math.Clamp(original.Width / 4, 150, 250);
             var halfHeight = Math.Clamp(original.Height / 3, 27, 58);
             var region = Rectangle.Intersect(new Rectangle(Point.Empty, original.Size),
@@ -177,6 +274,9 @@ internal sealed partial class ScreenOcr : IDisposable
             var paleLabel = await ReadSmallPaleLabelAsync(original, origin, local, cursor, originalWord, token).ConfigureAwait(false);
             if (paleLabel is not null)
                 return paleLabel;
+            var coloredWord = await ReadColoredHyphenatedWordAsync(original, origin, local, cursor, token).ConfigureAwait(false);
+            if (coloredWord is not null)
+                return coloredWord;
             if (HasBrightTextOnBlack(original, local, luminance!))
             {
                 var displayArea = original.Width <= 700 ? new Rectangle(Point.Empty, original.Size)
@@ -303,6 +403,18 @@ internal sealed partial class ScreenOcr : IDisposable
                 }
             }
         }
+        if (paragraph && hasTarget is not null && TextSelection.At(originalLines, cursor, true, null) is { } originalParagraph)
+        {
+            if (HasMixedBrightText(original, local))
+            {
+                var bright = await ReadBrightTextAsync().ConfigureAwait(false);
+                if (TextSelection.At(bright, cursor, true, null) is { } candidate
+                    && (TextSelection.RestoresParagraphWords(candidate, originalParagraph, bright)
+                        || TextSelection.AgreesOnParagraphWords(candidate, originalParagraph)))
+                    return bright;
+            }
+        }
+
         if (hasTarget is null || hasTarget(originalLines))
             return originalLines;
 
@@ -312,20 +424,67 @@ internal sealed partial class ScreenOcr : IDisposable
 
         async Task<ScreenLine[]> RefineGameTextAsync(ScreenLine[] filtered)
         {
-            if (!paragraph || TextSelection.At(filtered, cursor, true, null) is not { } initial)
-                return filtered;
-
-            if (initial.Text.AsSpan().IndexOfAny('(', ')') >= 0
+            var initial = paragraph ? TextSelection.At(filtered, cursor, true, null) : null;
+            if (initial is not null && initial.Text.AsSpan().IndexOfAny('(', ')') >= 0
                 && await ReadWhiteChoiceAsync().ConfigureAwait(false) is { } sharperChoice)
                 return sharperChoice;
+            if (await ReadDialogueOptionAsync(filtered, initial).ConfigureAwait(false) is { } option)
+                return option;
 
             // A single-color mask can erase emphasized words on an otherwise dark text panel.
-            if (!HasMixedBrightText(original, local))
+            if (initial is null || !HasMixedBrightText(original, local))
                 return filtered;
+
+            var bright = await ReadBrightTextAsync().ConfigureAwait(false);
+            if (TextSelection.At(bright, cursor, true, null) is { } restored
+                && TextSelection.RestoresParagraphWords(restored, initial, bright))
+                return bright;
 
             var raw = await RecognizeBitmapAsync(original, origin, scale, token).ConfigureAwait(false);
             return TextSelection.At(raw, cursor, true, null) is { } candidate
                 && TextSelection.RestoresParagraphWords(candidate, initial, raw) ? raw : filtered;
+        }
+
+        async Task<ScreenLine[]> ReadBrightTextAsync()
+        {
+            using var mask = ConvertPixels(original, token,
+                (red, green, blue) => Luminance(red, green, blue) >= 170 ? (byte)0 : (byte)255);
+            return await RecognizeBitmapAsync(mask, origin, scale, token).ConfigureAwait(false);
+        }
+
+        async Task<ScreenLine[]?> ReadDialogueOptionAsync(ScreenLine[] lines, Selection? selected = null)
+        {
+            selected ??= TextSelection.At(lines, cursor, paragraph, null);
+            var anchorLine = lines.Where(line => line.Bounds.Left <= cursor.X + line.Bounds.Height * 2
+                    && line.Bounds.Right >= cursor.X - line.Bounds.Height * .6f
+                    && line.Words.Any(word => word.Text.Length >= 3))
+                .MinBy(line => Math.Abs(line.Bounds.Top + line.Bounds.Height / 2 - cursor.Y));
+            DialogueOption? located = null;
+            if (anchorLine is not null)
+            {
+                var heights = anchorLine.Words.Where(word => word.Text.Length >= 3)
+                    .Select(word => word.Bounds.Height).Order().ToArray();
+                var textLeft = Math.Min(anchorLine.Bounds.Left, paragraph ? selected?.Bounds.Left ?? float.MaxValue : float.MaxValue);
+                located = FindDialogueOption(original, local, textLeft - origin.X, heights[heights.Length / 2]);
+            }
+            if (located is null && lines.Any(line => line.Bounds.Height >= 7
+                    && (paragraph || line.Bounds.Height < 17 && RectangleF.Inflate(line.Bounds, 6, 6).Contains(cursor)))
+                && SampleLuminance(original, local).Skip(235).Sum() >= 10)
+                located = FindDialogueOption(original, local);
+            if (located is not { } area)
+                return null;
+
+            if (area.Bounds.Width == 0 || local.X < area.Bounds.Left)
+                return [];
+            var rows = await ReadOptionTextAsync(original, origin, area, token).ConfigureAwait(false);
+            if (TextSelection.At(rows, cursor, paragraph, null) is not { } choice)
+                return null;
+
+            RectangleF optionBounds = area.Bounds;
+            optionBounds.Offset(origin);
+            return paragraph && selected is not null && optionBounds.Contains(selected.Bounds)
+                && TextSelection.PreservesParagraph(selected, choice)
+                && selected.Text.Count(char.IsLetter) > choice.Text.Count(char.IsLetter) ? lines : rows;
         }
 
         async Task<ScreenLine[]?> ReadWhiteChoiceAsync()
@@ -346,7 +505,125 @@ internal sealed partial class ScreenOcr : IDisposable
     private static bool IsUppercaseWord(string text) => text.Count(char.IsAsciiLetterUpper) >= 2
         && text.All(letter => char.IsAsciiLetterUpper(letter) || char.IsAsciiDigit(letter));
 
-    private static Rectangle? FindDisplayLine(Bitmap mask, Point cursor, int maxHeight = 64, float gapRatio = 1)
+    private async Task<ScreenLine[]> ReadOptionTextAsync(Bitmap original, Point origin,
+        DialogueOption option, CancellationToken token)
+    {
+        var area = option.Bounds;
+        using var image = original.Clone(area, PixelFormat.Format32bppArgb);
+        var small = option.IconWidth < 24;
+        // Preserve partially covered pixels when the small letters have few fully white strokes.
+        using var mask = small ? ConvertPixels(image, token, (red, green, blue) =>
+            (byte)(255 - Math.Max(0, Math.Min(red, Math.Min(green, blue)) - 176) * 2))
+            : LightTextMask(image, 235, token);
+        var preferredScale = small ? Math.Min(4.5f, 74f / option.IconWidth) : Math.Min(1f, 72f / option.IconWidth);
+        var scale = Math.Min(preferredScale,
+            (float)OcrEngine.MaxImageDimension / Math.Max(area.Width, area.Height));
+        return await RecognizeBitmapAsync(mask, new Point(origin.X + area.X, origin.Y + area.Y), scale, token)
+            .ConfigureAwait(false);
+    }
+
+    private readonly record struct DialogueOption(Rectangle Bounds, int IconWidth);
+
+    private static unsafe DialogueOption? FindDialogueOption(Bitmap bitmap, Point cursor, float? textLeft = null, float letterHeight = 0)
+    {
+        // The speech icon has three dark dots bounded by a solid white bubble.
+        var left = textLeft is { } start ? Math.Max(0, (int)(start - letterHeight * 3)) : 0;
+        var right = textLeft is { } edge ? Math.Min(bitmap.Width, (int)(edge + letterHeight * 2))
+            : Math.Min(bitmap.Width, cursor.X + 180);
+        var radius = textLeft.HasValue ? (int)(letterHeight * 2) : Math.Min(180, bitmap.Height / 2);
+        var minWidth = textLeft.HasValue ? letterHeight : 14;
+        var maxWidth = textLeft.HasValue ? letterHeight * 2.9f : 180;
+        var data = bitmap.LockBits(new Rectangle(Point.Empty, bitmap.Size), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            for (var distance = 0; distance <= radius; distance++)
+            {
+                if (TryRow(cursor.Y - distance) is { } above)
+                    return CenterOnDots(cursor.Y - distance, above);
+                if (distance != 0 && TryRow(cursor.Y + distance) is { } below)
+                    return CenterOnDots(cursor.Y + distance, below);
+            }
+        }
+        finally { bitmap.UnlockBits(data); }
+        return null;
+
+        DialogueOption CenterOnDots(int row, DialogueOption found)
+        {
+            var first = row;
+            var last = row;
+            while (Math.Abs(first - row) < found.IconWidth / 5 && SameIcon(first - 1))
+                first--;
+            while (Math.Abs(last - row) < found.IconWidth / 5 && SameIcon(last + 1))
+                last++;
+            return TryRow((first + last) / 2) ?? found;
+
+            bool SameIcon(int nearby) => TryRow(nearby) is { } dot
+                && Math.Abs(dot.Bounds.Left - found.Bounds.Left) <= found.IconWidth / 8;
+        }
+
+        DialogueOption? TryRow(int y)
+        {
+            if (y < 0 || y >= bitmap.Height)
+                return null;
+            Span<int> lengths = stackalloc int[7];
+            for (var x = left; x < right;)
+            {
+                if (!IsWhite(x, y))
+                {
+                    x++;
+                    continue;
+                }
+                var end = x;
+                for (var run = 0; run < lengths.Length; run++)
+                {
+                    var start = end;
+                    var white = run % 2 == 0;
+                    while (end < right && IsWhite(end, y) == white)
+                        end++;
+                    lengths[run] = end - start;
+                }
+                var width = end - x;
+                if (end < right && cursor.X >= x - width / 8 && Math.Abs(cursor.Y - y) < width
+                    && width >= minWidth && width <= maxWidth
+                    && lengths[0] >= width * .12f && lengths[6] >= width * .12f
+                    && IsDot(lengths[1], width) && IsDot(lengths[3], width) && IsDot(lengths[5], width)
+                    && lengths[2] >= width * .07f && lengths[4] >= width * .07f
+                    && IsCenterSolid(x, y - width / 5, width) && IsCenterSolid(x, y + width / 5, width)
+                    && IsOutsideBubble(x, y - width * 3 / 5, width) && IsOutsideBubble(x, y + width * 3 / 5, width))
+                {
+                    var startOfText = end + width / 9;
+                    var area = Rectangle.FromLTRB(Math.Min(startOfText, bitmap.Width), Math.Max(0, y - width),
+                        bitmap.Width, Math.Min(bitmap.Height, y + width));
+                    return new DialogueOption(area, width);
+                }
+                x += lengths[0];
+            }
+            return null;
+        }
+
+        bool IsCenterSolid(int x, int y, int width)
+        {
+            if (y < 0 || y >= bitmap.Height)
+                return false;
+            for (var column = x + width / 4; column <= x + width * 3 / 4; column += 2)
+                if (!IsWhite(column, y))
+                    return false;
+            return true;
+        }
+
+        bool IsOutsideBubble(int x, int y, int width) => y >= 0 && y < bitmap.Height
+            && !IsWhite(x + width / 4, y) && !IsWhite(x + width / 2, y) && !IsWhite(x + width * 3 / 4, y);
+
+        bool IsWhite(int x, int y)
+        {
+            var pixel = (byte*)data.Scan0 + y * data.Stride + x * 4;
+            return IsPale(pixel[2], pixel[1], pixel[0], 230);
+        }
+
+        static bool IsDot(int run, int width) => run >= width * .09f && run <= width * .22f;
+    }
+
+    private static Rectangle? FindDisplayLine(Bitmap mask, Point cursor, int maxHeight = 64, float gapRatio = 1, int minHeight = 8)
     {
         // Use the ink bands of small high-contrast labels to separate them from nearby controls.
         var left = Math.Max(0, cursor.X - 32);
@@ -374,7 +651,7 @@ internal sealed partial class ScreenOcr : IDisposable
         while (bottom < bottomLimit && ink[bottom - topLimit])
             bottom++;
         var height = bottom - top;
-        if (height < 8 || height > maxHeight)
+        if (height < minHeight || height > maxHeight)
             return null;
 
         var columns = new List<int>();
@@ -463,13 +740,17 @@ internal sealed partial class ScreenOcr : IDisposable
         return surrounding.Take(43).Sum() * 100 >= surrounding.Sum() * 50;
     }
 
-    private static Bitmap? BoostFaintText(Bitmap original, int[] samples, CancellationToken token)
+    private static Bitmap? BoostFaintText(Bitmap original, int[] samples, CancellationToken token,
+        bool compressedHighlights = false, bool sparseInk = false, (int Gain, int Margin)? transfer = null)
     {
         var total = samples.Sum();
-        var brightestBand = 230;
-        for (var value = 231; value < samples.Length; value++)
+        var brightestBand = compressedHighlights ? 210 : 230;
+        var minimumContrast = compressedHighlights ? 6 : 16;
+        for (var value = brightestBand + 1; value < samples.Length; value++)
             if (samples[value] > samples[brightestBand])
                 brightestBand = value;
+        if (compressedHighlights && !sparseInk && brightestBand > 235)
+            return null;
         var background = 0;
         var mutedInk = 0;
         var darkerInk = 0;
@@ -479,14 +760,40 @@ internal sealed partial class ScreenOcr : IDisposable
                 background += samples[value];
             else if (value < brightestBand - 80)
                 darkerInk += samples[value];
-            else if (value <= brightestBand - 16)
+            else if (value <= brightestBand - minimumContrast)
                 mutedInk += samples[value];
         }
-        if (total == 0 || background * 100 < total * 58 || mutedInk * 100 < total * 5 || darkerInk * 100 > total * 2)
+        if (total == 0 || background * 100 < total * 58 || mutedInk * 100 < total * (sparseInk ? 2 : 5)
+            || darkerInk * 100 > total * 2)
             return null;
 
+        // Tone mapping can bring both the panel and its lettering into the same narrow highlight band.
+        var (gain, backgroundMargin) = transfer ?? (sparseInk ? (12, 1) : compressedHighlights ? (42, 1) : (8, 2));
         return ConvertPixels(original, token, (red, green, blue) =>
-            (byte)Math.Clamp(255 - (brightestBand - 2 - Luminance(red, green, blue)) * 8, 0, 255));
+            (byte)Math.Clamp(255 - (brightestBand - backgroundMargin - Luminance(red, green, blue)) * gain, 0, 255));
+    }
+
+    private static int InternalCapitalI(string word)
+    {
+        for (var i = 1; i < word.Length - 1; i++)
+            if (word[i] == 'I' && char.IsAsciiLetterUpper(word[i - 1]) && char.IsAsciiLetterLower(word[i + 1]))
+                return i;
+        return -1;
+    }
+
+    private static bool ExtendsFaintCompound(ScreenLine[] initial, ScreenLine[] candidate)
+    {
+        if (initial.Length != 1 || candidate.Length != 1)
+            return false;
+        var first = initial[0];
+        var extended = candidate[0];
+        if (extended.Bounds.Right - first.Bounds.Right < first.Bounds.Height * .5f
+            || Math.Abs(first.Bounds.Left - extended.Bounds.Left) > first.Bounds.Height * .25f)
+            return false;
+        var prefix = first.Text.Replace(" ", "", StringComparison.Ordinal);
+        var text = extended.Text.Replace(" ", "", StringComparison.Ordinal);
+        return text.Length > prefix.Length && (text.StartsWith(prefix, StringComparison.Ordinal)
+            || prefix.EndsWith('I') && text.StartsWith(prefix[..^1] + 'l', StringComparison.Ordinal));
     }
 
     private static int[] SampleLuminance(Bitmap bitmap, Point cursor, int halfWidth = 27, int halfHeight = 19)
@@ -499,6 +806,120 @@ internal sealed partial class ScreenOcr : IDisposable
             histogram[Luminance(color.R, color.G, color.B)]++;
         }
         return histogram;
+    }
+
+    private async Task<ScreenLine[]?> ReadFaintCompoundAsync(Bitmap image, Point origin, Point cursor,
+        OcrEngine bilingual, CancellationToken token, bool smallText = false, Func<string, bool>? acceptWord = null)
+    {
+        var y = cursor.Y - origin.Y;
+        var x = cursor.X - origin.X;
+        if ((uint)x >= (uint)image.Width || (uint)y >= (uint)image.Height)
+            return null;
+        var top = Math.Max(0, y - 46);
+        var bottom = Math.Min(image.Height, y + 47);
+        var leftEdge = smallText ? Math.Max(0, x - 88) : 0;
+        var rightEdge = smallText ? Math.Min(image.Width, x + 89) : image.Width;
+        var inkStep = smallText ? 1 : 2;
+        var threshold = smallText ? 216 : 150;
+        var ink = new bool[bottom - top];
+        for (var row = top; row < bottom; row++)
+        for (var column = leftEdge; column < rightEdge; column += inkStep)
+        {
+            if (image.GetPixel(column, row).R >= threshold)
+                continue;
+            ink[row - top] = true;
+            break;
+        }
+        if (!ink[y - top])
+            return null;
+        var upper = y;
+        var lower = y + 1;
+        while (upper > top && ink[upper - 1 - top])
+            upper--;
+        while (lower < bottom && ink[lower - top])
+            lower++;
+        var height = lower - upper;
+        if (height < (smallText ? 3 : 8) || height > 68)
+            return null;
+
+        var inkLeft = 0;
+        var inkRight = image.Width - 1;
+        while (inkLeft < inkRight && !ColumnHasInk(inkLeft))
+            inkLeft++;
+        while (inkRight > inkLeft && !ColumnHasInk(inkRight))
+            inkRight--;
+        var rowArea = Rectangle.FromLTRB(Math.Max(0, inkLeft - 6), Math.Max(0, upper - 4),
+            Math.Min(image.Width, inkRight + 7), Math.Min(image.Height, lower + 4));
+        using var strip = image.Clone(rowArea, PixelFormat.Format32bppArgb);
+        var rowOrigin = new Point(origin.X + rowArea.X, origin.Y + rowArea.Y);
+        var maxScale = (float)OcrEngine.MaxImageDimension / strip.Width;
+        var readingHeights = smallText ? new[] { 28f, 34f, 40f, 48f } : new[] { 40f, 36f, 45f };
+        foreach (var readingHeight in readingHeights)
+        {
+            var scale = Math.Min(readingHeight / height, maxScale);
+            var rows = await RecognizeBitmapAsync(strip, rowOrigin, scale, token, bilingual).ConfigureAwait(false);
+            var han = rows.SelectMany(line => line.Words).Where(word => word.Text.Any(IsHan))
+                .OrderBy(word => word.Bounds.Left).ToArray();
+            var left = han.Where(word => word.Bounds.Right <= cursor.X + 2).Reverse().Take(2);
+            var right = han.Where(word => word.Bounds.Left >= cursor.X - 2).Take(2).ToArray();
+            foreach (var before in left)
+            foreach (var after in right)
+            {
+                var first = BlankColumn(before.Bounds.Right - rowOrigin.X, fromRight: true);
+                var last = BlankColumn(after.Bounds.Left - rowOrigin.X, fromRight: false);
+                if (last - first < height * 3 || last - first > height * 16)
+                    continue;
+
+                // The English pass sees only the span between the nearby Han characters.
+                const int padding = 6;
+                using var latin = new Bitmap(last - first + 2 * padding, strip.Height, PixelFormat.Format32bppArgb);
+                using (var graphics = Graphics.FromImage(latin))
+                {
+                    graphics.Clear(Color.White);
+                    graphics.DrawImage(strip, new Rectangle(padding, 0, last - first, strip.Height),
+                        first, 0, last - first, strip.Height, GraphicsUnit.Pixel);
+                }
+                var found = await RecognizeBitmapAsync(latin, new Point(rowOrigin.X + first - padding, rowOrigin.Y), scale, token)
+                    .ConfigureAwait(false);
+                var text = string.Concat(found.SelectMany(line => line.Words).Select(word => word.Text));
+                if (SlashSeparatedWords().IsMatch(text) && TextSelection.At(found, cursor, false, null) is { } hit
+                    && (acceptWord is null || acceptWord(hit.Text)))
+                    return found;
+            }
+        }
+        return null;
+
+        bool ColumnHasInk(int column)
+        {
+            for (var row = upper; row < lower; row++)
+                if (image.GetPixel(column, row).R < threshold)
+                    return true;
+            return false;
+        }
+
+        int BlankColumn(float edge, bool fromRight)
+        {
+            var center = Math.Clamp((int)MathF.Round(edge), 0, strip.Width - 1);
+            var radius = Math.Max(2, height / 9);
+            var best = center;
+            var leastInk = int.MaxValue;
+            var start = Math.Max(0, center - radius);
+            var end = Math.Min(strip.Width - 1, center + radius);
+            for (var i = 0; i <= end - start; i++)
+            {
+                var column = fromRight ? end - i : start + i;
+                var count = 0;
+                for (var row = 0; row < strip.Height; row++)
+                if (strip.GetPixel(column, row).R < threshold)
+                        count++;
+                if (count < leastInk || count == leastInk && Math.Abs(column - center) < Math.Abs(best - center) - 1)
+                {
+                    best = column;
+                    leastInk = count;
+                }
+            }
+            return best;
+        }
     }
 
     private static int Luminance(int red, int green, int blue) => (77 * red + 150 * green + 29 * blue + 128) >> 8;
@@ -603,8 +1024,11 @@ internal sealed partial class ScreenOcr : IDisposable
     {
         // The bilingual pass can split a Latin word at a glyph gap. Stitch it back only
         // when the English pass sees the same letters as one word in the same position.
-        var reference = english.SelectMany(line => line.Words)
+        var englishWords = english.SelectMany(line => line.Words).ToArray();
+        var reference = englishWords
             .Where(word => word.Text.Length >= 2 && word.Text.All(char.IsAsciiLetter)).ToArray();
+        var hyphenated = englishWords.Where(word => word.Text.Contains('-')
+            && word.Text.All(letter => char.IsAsciiLetter(letter) || letter == '-')).ToArray();
         return mixed.Select(line =>
         {
             if (!line.Text.Any(IsHan))
@@ -614,6 +1038,13 @@ internal sealed partial class ScreenOcr : IDisposable
             for (var index = 0; index < line.Words.Length; index++)
             {
                 var first = line.Words[index];
+                if (first.Text.EndsWith('-') && index + 2 < line.Words.Length
+                    && RestoreHyphenatedWord(first, line.Words[index + 1], line.Words[index + 2], hyphenated) is { } restored)
+                {
+                    words.Add(restored);
+                    index += 2;
+                    continue;
+                }
                 if (index + 1 < line.Words.Length && first.Text.All(char.IsAsciiLetter))
                 {
                     var second = line.Words[index + 1];
@@ -640,6 +1071,22 @@ internal sealed partial class ScreenOcr : IDisposable
             }
             return CorrectAppFileName(line with { Words = words.ToArray() });
         }).ToArray();
+    }
+
+    private static ScreenWord? RestoreHyphenatedWord(ScreenWord first, ScreenWord middle, ScreenWord last,
+        ScreenWord[] english)
+    {
+        // The bilingual engine can read a Latin letter as a CJK punctuation mark.
+        if (middle.Text.Length != 1 || !char.IsPunctuation(middle.Text[0])
+            || !first.Text[..^1].All(char.IsAsciiLetter) || !last.Text.All(char.IsAsciiLetter))
+            return null;
+        var bounds = RectangleF.Union(first.Bounds, last.Bounds);
+        var tolerance = Math.Max(2, bounds.Height * .22f);
+        return english.FirstOrDefault(word => word.Text.Length == first.Text.Length + 1 + last.Text.Length
+            && word.Text.StartsWith(first.Text, StringComparison.OrdinalIgnoreCase)
+            && word.Text.EndsWith(last.Text, StringComparison.OrdinalIgnoreCase)
+            && Math.Abs(word.Bounds.Left - bounds.Left) <= tolerance && Math.Abs(word.Bounds.Right - bounds.Right) <= tolerance
+            && Math.Abs(word.Bounds.Bottom - bounds.Bottom) <= tolerance && word.Bounds.IntersectsWith(middle.Bounds));
     }
 
     private static ScreenLine CorrectAppFileName(ScreenLine line)
@@ -685,12 +1132,13 @@ internal sealed partial class ScreenOcr : IDisposable
         return line with { Words = [words[0], new ScreenWord(numeral, bounds)] };
     }
 
-    private static unsafe bool HasMixedBrightText(Bitmap bitmap, Point cursor)
+    private static unsafe bool HasMixedBrightText(Bitmap bitmap, Point cursor, bool cyanOnly = false)
     {
         const int step = 4;
         var samples = (bitmap.Width + step - 1) / step;
-        var top = Math.Max(0, cursor.Y - 120);
-        var bottom = Math.Min(bitmap.Height, cursor.Y + 120);
+        var radius = cyanOnly ? Math.Max(120, bitmap.Width / 16) : 120;
+        var top = Math.Max(0, cursor.Y - radius);
+        var bottom = Math.Min(bitmap.Height, cursor.Y + radius);
         var data = bitmap.LockBits(new Rectangle(Point.Empty, bitmap.Size), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
         try
         {
@@ -710,15 +1158,56 @@ internal sealed partial class ScreenOcr : IDisposable
                         dark++;
                     else if (luma >= 185 && spread <= 37)
                         pale++;
-                    else if (luma >= 155 && spread >= 58)
+                    else if (cyanOnly ? IsBrightCyan(red, green, blue) : luma >= 155 && spread >= 58)
                         colored++;
                 }
-                if (dark * 2 >= samples && colored >= Math.Max(4, samples / 100) && pale >= colored * 2)
+                if (colored >= Math.Max(4, samples / 100)
+                    && (cyanOnly ? pale >= 6 : dark * 2 >= samples && pale >= colored * 2))
                     return true;
             }
             return false;
         }
         finally { bitmap.UnlockBits(data); }
+    }
+
+    private static bool IsBrightCyan(int red, int green, int blue) =>
+        green >= 190 && blue >= 195 && Math.Abs(green - blue) <= 42 && Math.Min(green, blue) - red >= 110;
+
+    private static bool HasCyanEmphasis(Bitmap bitmap, Point origin, RectangleF selection, ScreenLine[] lines)
+    {
+        // Require distinct pale and cyan words on a selected line. Bright scenery can also
+        // trigger the pixel scan, and a separate cyan label should use the usual reading.
+        foreach (var line in lines)
+        {
+            if (!selection.Contains(line.Bounds) || line.Words.Length < 3)
+                continue;
+            var paleWord = false;
+            var cyanWord = false;
+            foreach (var word in line.Words)
+            {
+                if (word.Text.Count(char.IsAsciiLetter) < 2)
+                    continue;
+                var bounds = Rectangle.Ceiling(word.Bounds);
+                bounds.Offset(-origin.X, -origin.Y);
+                bounds.Intersect(new Rectangle(Point.Empty, bitmap.Size));
+                var pale = 0;
+                var cyan = 0;
+                for (var y = bounds.Top; y < bounds.Bottom; y += 4)
+                for (var x = bounds.Left; x < bounds.Right; x += 4)
+                {
+                    var color = bitmap.GetPixel(x, y);
+                    if (IsBrightCyan(color.R, color.G, color.B))
+                        cyan++;
+                    else if (IsPale(color.R, color.G, color.B, 220, 28))
+                        pale++;
+                }
+                paleWord |= pale >= 3 && pale > cyan * 3;
+                cyanWord |= cyan >= 3 && cyan > pale * 3;
+                if (paleWord && cyanWord)
+                    return true;
+            }
+        }
+        return false;
     }
 
     private static int? LightLetteringCutoff(Bitmap bitmap, Point cursor)
@@ -745,9 +1234,9 @@ internal sealed partial class ScreenOcr : IDisposable
         return bitmap.Width > 2560 && white * 5 >= light * 3 ? 236 : 205;
     }
 
-    private static bool HasMapLabelColors(Bitmap bitmap, Point cursor)
+    private static bool HasMapLabelColors(Bitmap bitmap, Point cursor, int? sampleRadius = null)
     {
-        var radius = Math.Clamp(bitmap.Width / 34, 24, 40);
+        var radius = sampleRadius ?? Math.Clamp(bitmap.Width / 34, 24, 40);
         var lettering = 0;
         var terrain = 0;
         var samples = 0;
@@ -971,7 +1460,8 @@ internal sealed partial class ScreenOcr : IDisposable
             var word = recognized with { Text = text };
 
             // A wide horizontal gap often separates independent controls or dialogue columns.
-            if (words.Count > 0 && word.Bounds.Left - bounds.Right > Math.Max(36, bounds.Height * 2.8f))
+            if (words.Count > 0
+                && word.Bounds.Left - bounds.Right > Math.Clamp(36f, bounds.Height * 2.8f, bounds.Height * 3.6f))
             {
                 yield return new ScreenLine(words.ToArray(), bounds);
                 words.Clear();
@@ -1065,6 +1555,9 @@ internal static partial class TextSelection
 
     private static Selection? ParagraphAt(ScreenLine[] lines, Point cursor)
     {
+        if (ListAt(lines, cursor) is { } list)
+            return list;
+
         var ordered = lines.Where(line => !DistanceLabel().IsMatch(line.Text)
             && line.Words.Any(word => WordAt(word, (int)word.Bounds.Left) is not null))
             .OrderBy(line => line.Bounds.Top).ThenBy(line => line.Bounds.Left).ToArray();
@@ -1091,7 +1584,7 @@ internal static partial class TextSelection
         }
         above.Reverse();
         var block = above.Append(anchor).Concat(below).ToArray();
-        var text = string.Join(' ', block.Select(line => line.Text));
+        var text = string.Join(IsMetadataBlock(block) ? '\n' : ' ', block.Select(line => line.Text));
         var bounds = block.Select(line => line.Bounds).Aggregate(RectangleF.Union);
         return new Selection(text, text, bounds);
     }
@@ -1134,6 +1627,31 @@ internal static partial class TextSelection
         return false;
     }
 
+    internal static bool AgreesOnParagraphWords(Selection candidate, Selection initial)
+    {
+        if (!PreservesParagraph(candidate, initial))
+            return false;
+
+        var before = EnglishWord().Matches(initial.Text);
+        var after = EnglishWord().Matches(candidate.Text);
+        if (before.Count < 8 || before.Count != after.Count)
+            return false;
+
+        // The contrast mask can make one ambiguous letter clearer without changing the selection.
+        var changes = 0;
+        for (var index = 0; index < before.Count; index++)
+        {
+            var oldWord = before[index].Value.ToLowerInvariant();
+            var newWord = after[index].Value.ToLowerInvariant();
+            if (oldWord == newWord)
+                continue;
+            if (++changes > 1 || oldWord.Length < 6 || oldWord.Length != newWord.Length
+                || oldWord.Where((letter, position) => letter != newWord[position]).Count() != 1)
+                return false;
+        }
+        return changes == 1;
+    }
+
     private static ScreenLine? LinkedNeighbor(ScreenLine[] lines, ScreenLine line, bool below)
     {
         var next = Neighbor(lines, line, below);
@@ -1146,7 +1664,7 @@ internal static partial class TextSelection
         return lines.Where(candidate =>
         {
             var next = candidate.Bounds;
-            var height = Math.Max(10, Math.Max(current.Height, next.Height));
+            var height = Math.Max(current.Height, next.Height);
             var centerDifference = next.Top + next.Height / 2 - current.Top - current.Height / 2;
             var gap = below ? next.Top - current.Bottom : current.Top - next.Bottom;
             if ((below ? centerDifference : -centerDifference) <= height * 0.5f
@@ -1163,10 +1681,11 @@ internal static partial class TextSelection
                 && gap > height * 0.5f && char.IsUpper(second.Text.FirstOrDefault(char.IsLetter))
                 && !char.IsPunctuation(first.Text[^1]))
                 return false;
-            // Dialogue choices often end in an ellipsis and are separated by a visibly larger gap.
+            // A larger, short heading can precede a body line that OCR has already clipped.
+            var heading = first.Bounds.Height >= second.Bounds.Height * 1.2f && first.Bounds.Width < second.Bounds.Width * 0.85f;
             if (gap > Math.Min(current.Height, next.Height) * 0.55f
                 && (first.Text.EndsWith("...", StringComparison.Ordinal) || first.Text.EndsWith('…'))
-                && char.IsUpper(second.Text.FirstOrDefault(char.IsLetter)))
+                && (heading || char.IsUpper(second.Text.FirstOrDefault(char.IsLetter))))
                 return false;
 
             // A short wrapped line can be offset from the preceding line. Require stronger overlap
@@ -1175,9 +1694,9 @@ internal static partial class TextSelection
         }).MinBy(candidate => Math.Abs(candidate.Bounds.Top + candidate.Bounds.Height / 2 - current.Top - current.Height / 2));
     }
 
-    internal static Rectangle ExtendParagraphCapture(Rectangle capture, Rectangle available, RectangleF text)
+    internal static Rectangle ExtendParagraphCapture(Rectangle capture, Rectangle available, RectangleF text, float lineHeight)
     {
-        var margin = Math.Clamp(capture.Width * 0.022f, 30f, 90f);
+        var margin = Math.Max(Math.Clamp(capture.Width * 0.022f, 30f, 90f), lineHeight * 1.6f);
         var top = capture.Top;
         var bottom = capture.Bottom;
         // Read more only in the direction where the selected paragraph reaches the image edge.

@@ -9,8 +9,8 @@ internal static class GenshinMapLabels
     public static ScreenLine? At(ScreenLine[] source, Point cursor)
     {
         var words = source.SelectMany(line => line.Words)
-            .Where(word => Math.Abs(cursor.Y - word.Bounds.Top - word.Bounds.Height / 2) <= 95
-                && word.Bounds.Height >= 8 && word.Bounds.Height <= 70).ToArray();
+            .Where(word => Math.Abs(cursor.Y - word.Bounds.Top - word.Bounds.Height / 2) <= 125
+                && word.Bounds.Height is >= 8 and <= 110).ToArray();
         // Map icons can lead OCR to put adjacent parts of a label in separate lines.
         var rows = new List<List<ScreenWord>>();
         foreach (var word in words.OrderBy(word => word.Bounds.Top + word.Bounds.Height / 2))

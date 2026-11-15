@@ -49,7 +49,7 @@ internal sealed class TranslatorApp : ApplicationContext
     private bool speechButtonWasDown;
     private bool speechKeyWasDown;
     private bool speechRequested;
-    private string? hoverEnglish;
+    private Selection? hoverWord;
     private Point anchor;
     private long stableSince;
     private CancellationTokenSource? pending;
@@ -99,10 +99,15 @@ internal sealed class TranslatorApp : ApplicationContext
         {
             mainWindow = new DemoWindow(ShowTranslationSettings);
             mainWindow.FormClosed += (_, _) => { mainWindow = null; ResetHover(); };
-            mainWindow.Show();
         }
+        if (!mainWindow.Visible)
+            mainWindow.Show();
         if (mainWindow.WindowState == FormWindowState.Minimized)
             mainWindow.WindowState = FormWindowState.Normal;
+        // The process startup show command can hide the first native window despite Form.Show().
+        const int show = 5;
+        if (!Desktop.IsWindowVisible(mainWindow.Handle))
+            Desktop.ShowWindow(mainWindow.Handle, show);
         mainWindow.Activate();
     }
 
@@ -126,8 +131,8 @@ internal sealed class TranslatorApp : ApplicationContext
             stableSince = Environment.TickCount64;
             usingParagraph = readParagraph;
         }
-        if (speak && hoverEnglish is { } english)
-            Speak(english);
+        if (speak && hoverWord is { } spoken)
+            Speak(spoken, point, window);
         else if (speak)
             speechRequested = true;
 
@@ -163,17 +168,17 @@ internal sealed class TranslatorApp : ApplicationContext
                 if (isDesktop && DesktopLabels.TryRead(cursor, out var desktopLabel))
                     return (desktopLabel, desktopLabel, activeGlossary);
                 var result = await HoverRecognition.ReadAsync(available, capture, wider, cursor, readParagraph,
-                    isGenshin, activeGlossary, recognizer.ReadAsync, request.Token).ConfigureAwait(false);
+                    isGenshin, activeGlossary, recognizer.ReadAsync, request.Token, recognizer.ReadOptionAsync).ConfigureAwait(false);
                 return (result.Target, result.Word, activeGlossary);
             }, request.Token);
             if (!StillHovering(request, window, cursor, readParagraph))
                 return;
-            hoverEnglish = word is null ? null : glossary?.CorrectOcr(word.Text) ?? word.Text;
+            hoverWord = word is null ? null : word with { Text = glossary?.CorrectOcr(word.Text) ?? word.Text };
             if (speechRequested)
             {
                 speechRequested = false;
-                if (hoverEnglish is { } recognizedEnglish)
-                    Speak(recognizedEnglish);
+                if (hoverWord is { } recognized)
+                    Speak(recognized, cursor, window);
             }
 
             if (target is null)
@@ -222,10 +227,12 @@ internal sealed class TranslatorApp : ApplicationContext
         }
     }
 
-    private void Speak(string english)
+    private void Speak(Selection word, Point cursor, IntPtr window)
     {
-        if (!speech.Speak(english))
+        if (!speech.Speak(word.Text))
             tray.ShowBalloonTip(3500, "无法朗读英文", "请检查 Windows 英语语音包和音频输出。", ToolTipIcon.Warning);
+        if (translator.FindPronunciation(word.Text) is { } pronunciation)
+            popup.ShowPronunciation(word.Text, pronunciation, word.Bounds, cursor, window);
     }
 
     private bool TryHover(out IntPtr window, out Point point, out bool readParagraph)
@@ -300,7 +307,7 @@ internal sealed class TranslatorApp : ApplicationContext
         stableSince = 0;
         attempted = false;
         speechRequested = false;
-        hoverEnglish = null;
+        hoverWord = null;
     }
 
     private void UpdateTray() => tray.Text = pause.Checked ? "屏幕翻译 · 已暂停" : "屏幕翻译";

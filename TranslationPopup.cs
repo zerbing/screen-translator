@@ -14,7 +14,11 @@ internal sealed class TranslationPopup : Form
     private string english = "";
     private string chinese = "";
     private string? source;
+    private (string Word, string Phonetic)? pronunciation;
+    private string pronunciationText = "";
+    private RectangleF targetBounds;
     private Rectangle englishArea;
+    private Rectangle pronunciationArea;
     private Rectangle chineseArea;
     private Rectangle sourceArea;
 
@@ -57,6 +61,11 @@ internal sealed class TranslationPopup : Form
         english = original;
         chinese = translation;
         source = provider;
+        targetBounds = target;
+        pronunciationText = pronunciation is { } spoken
+            ? string.Equals(english, spoken.Word, StringComparison.OrdinalIgnoreCase)
+                ? $"/{spoken.Phonetic}/" : $"{spoken.Word} /{spoken.Phonetic}/"
+            : "";
         var screen = Screen.FromPoint(cursor).WorkingArea;
         var dpi = Math.Clamp(Desktop.GetDpiForWindow(targetWindow) / 96f, 1, 3);
         var pad = (int)(15 * dpi);
@@ -65,17 +74,25 @@ internal sealed class TranslationPopup : Form
         using var graphics = Graphics.FromHwnd(targetWindow);
         var body = TextRenderer.MeasureText(graphics, chinese, bodyFont, new Size(maxWidth, int.MaxValue), TextFlags);
         var caption = TextRenderer.MeasureText(graphics, english, subFont, new Size(maxWidth, int.MaxValue), TextFlags);
+        var phonetic = TextRenderer.MeasureText(graphics, pronunciationText, subFont, new Size(maxWidth, int.MaxValue), TextFlags);
         var footer = TextRenderer.MeasureText(graphics, source ?? "", subFont, new Size(maxWidth, int.MaxValue), TextFlags);
-        var width = Math.Min(maxWidth, Math.Max((int)(100 * dpi), Math.Max(body.Width, Math.Max(caption.Width, footer.Width)))) + (2 * pad);
+        var width = Math.Min(maxWidth, Math.Max((int)(100 * dpi),
+            Math.Max(Math.Max(body.Width, caption.Width), Math.Max(phonetic.Width, footer.Width)))) + (2 * pad);
 
         var lineHeight = TextRenderer.MeasureText(graphics, "Ay", subFont, new Size(maxWidth, int.MaxValue), TextFlags).Height;
-        var captionHeight = Math.Min(caption.Height, lineHeight * 3);
+        var normalCaptionHeight = lineHeight * 3;
+        var captionLimit = english.Contains('\n') ? Math.Max(normalCaptionHeight, screen.Height / 3) : normalCaptionHeight;
+        var captionHeight = Math.Min(caption.Height, captionLimit);
         englishArea = new Rectangle(pad, pad, width - 2 * pad, captionHeight);
-        var textTop = english.Length == 0 ? pad : englishArea.Bottom + pad / 2;
-        var bodyHeight = Math.Min(body.Height, screen.Height - 6 * pad - 5 * lineHeight);
-        chineseArea = new Rectangle(pad, textTop, width - 2 * pad, Math.Max(lineHeight, bodyHeight));
+        var phoneticTop = english.Length == 0 ? pad : englishArea.Bottom + pad / 3;
+        pronunciationArea = new Rectangle(pad, phoneticTop, width - 2 * pad, phonetic.Height);
+        var headerBottom = pronunciationText.Length > 0 ? pronunciationArea.Bottom : englishArea.Bottom;
+        var textTop = english.Length == 0 && pronunciationText.Length == 0 ? pad : headerBottom + pad / 2;
+        var bodyHeight = Math.Min(body.Height, screen.Height - 6 * pad - 5 * lineHeight - phonetic.Height
+            - Math.Max(0, captionHeight - normalCaptionHeight));
+        chineseArea = new Rectangle(pad, textTop, width - 2 * pad, chinese.Length == 0 ? 0 : Math.Max(lineHeight, bodyHeight));
         sourceArea = new Rectangle(pad, chineseArea.Bottom + pad / 2, width - 2 * pad, footer.Height);
-        var height = (source is null ? chineseArea.Bottom : sourceArea.Bottom) + pad;
+        var height = (source is not null ? sourceArea.Bottom : chinese.Length > 0 ? chineseArea.Bottom : headerBottom) + pad;
 
         var x = Math.Clamp(cursor.X + pad, screen.Left + pad / 2, Math.Max(screen.Left + pad / 2, screen.Right - width - pad / 2));
         var y = (int)Math.Max(cursor.Y + pad, target.Bottom + pad / 2);
@@ -97,8 +114,18 @@ internal sealed class TranslationPopup : Form
         Invalidate();
     }
 
+    public void ShowPronunciation(string word, string phonetic, RectangleF bounds, Point cursor, IntPtr targetWindow)
+    {
+        pronunciation = (word, phonetic);
+        if (IsHandleCreated && Desktop.IsWindowVisible(Handle))
+            Present(english, chinese, source, targetBounds, cursor, targetWindow);
+        else
+            Present(word, "", null, bounds, cursor, targetWindow);
+    }
+
     public void Dismiss()
     {
+        pronunciation = null;
         if (IsHandleCreated)
             ShowWindow(Handle, 0);
     }
@@ -111,7 +138,10 @@ internal sealed class TranslationPopup : Form
         e.Graphics.DrawPath(border, shape);
         if (english.Length > 0)
             TextRenderer.DrawText(e.Graphics, english, subFont, englishArea, Secondary, TextFlags | TextFormatFlags.EndEllipsis);
-        TextRenderer.DrawText(e.Graphics, chinese, bodyFont, chineseArea, Foreground, TextFlags | TextFormatFlags.EndEllipsis);
+        if (pronunciationText.Length > 0)
+            TextRenderer.DrawText(e.Graphics, pronunciationText, subFont, pronunciationArea, Secondary, TextFlags);
+        if (chinese.Length > 0)
+            TextRenderer.DrawText(e.Graphics, chinese, bodyFont, chineseArea, Foreground, TextFlags | TextFormatFlags.EndEllipsis);
         if (source is not null)
             TextRenderer.DrawText(e.Graphics, source, subFont, sourceArea, Color.FromArgb(136, 209, 194), TextFlags);
     }

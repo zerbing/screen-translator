@@ -43,11 +43,13 @@ def import_dictionary(source, destination):
                 continue
             definition = clean_definition(row["translation"] or "")
             if definition:
-                entries.setdefault(word, definition)
+                phonetic = " ".join((row["phonetic"] or "").split()).strip("[]/")
+                phonetic = phonetic.replace("'", "ˈ").replace(":", "ː")
+                entries.setdefault(word, (phonetic, definition))
 
     buckets = defaultdict(list)
-    for word, definition in sorted(entries.items()):
-        buckets[word.lower()[:2]].append(f"{word}\t{definition}\n")
+    for word, (phonetic, definition) in sorted(entries.items()):
+        buckets[word.lower()[:2]].append(f"{word}\t{phonetic}\t{definition}\n")
     if not buckets:
         raise ValueError("The source contains no usable English-Chinese entries.")
 

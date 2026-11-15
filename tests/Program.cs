@@ -4,7 +4,9 @@ using System.Text.Json;
 using ScreenTranslator;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
-var fixtureRoot = args.Length > 0 ? args[0] : Path.Combine(
+var zoomMatrix = args.Contains("--zoom-matrix", StringComparer.Ordinal);
+double[] requiredZooms = [1.75, 1.5, 1.25, 1.0, 0.75, 0.5];
+var fixtureRoot = args.FirstOrDefault(arg => arg != "--zoom-matrix") ?? Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ScreenTranslatorDev", "ocr-fixtures");
 var failures = 0;
 var checks = 0;
@@ -137,6 +139,9 @@ Check("common phrase", "in front of", SelectWords("in front of the gate", null)?
 Check("preposition sense", "离线释义", SelectWords("in", null)?.TermSource);
 using (var translator = new Translator())
 {
+    Check("ECDICT phonetic transcription", "ˈæpl", translator.FindPronunciation("apple"));
+    Check("ECDICT phonetic lookup ignores casing and surrounding spaces", "ˈæpl", translator.FindPronunciation(" APPLE "));
+    Check("missing IPA is omitted", null, translator.FindPronunciation("unlisted-test-headword"));
     foreach (var (english, chinese) in new[] { ("survive", "活下来"), ("Foreman", "工头"), ("café", "咖啡"), ("survived", "幸存") })
     {
         var selected = new Selection(english, english, RectangleF.Empty);
@@ -217,6 +222,10 @@ try
     await cache.StoreAsync(Translator.CacheKey(goodbye, false, null, false, []), new TranslationResult("再见", "MyMemory"));
     await cache.StoreAsync(Translator.CacheKey(goodbye, false, null, false, [], OnlineEngine.Baidu), new TranslationResult("下次见", "百度翻译"));
     await cache.StoreAsync(Translator.CacheKey(apple, true, null, false, []), new TranslationResult("苹果。", "MyMemory"));
+    var inspect = new Selection("Inspect the settings", "Inspect the settings", RectangleF.Empty);
+    var save = new Selection("Save the file", "Save the file", RectangleF.Empty);
+    await cache.StoreAsync(Translator.CacheKey(inspect, true, null, false, []), new TranslationResult("检查设置", "Google"));
+    await cache.StoreAsync(Translator.CacheKey(save, true, null, false, []), new TranslationResult("保存文件", "Google"));
     using var translator = new Translator(cachePath);
     var legacy = await translator.TranslateAsync(hello, false, null, null, default);
     var myMemory = await translator.TranslateAsync(goodbye, false, null, null, default);
@@ -226,6 +235,10 @@ try
     Check("Baidu uses its own online cache", "百度翻译", baidu.Source);
     var paragraph = await translator.TranslateAsync(apple, true, null, null, default);
     Check("paragraph mode skips ECDICT", "MyMemory", paragraph.Source);
+    const string sourceList = "/inspect - Inspect the settings\n2. Save the file\n/mnt/project/src";
+    var translatedList = await translator.TranslateAsync(new Selection(sourceList, sourceList, RectangleF.Empty), true, null, null, default);
+    Check("structured items preserve commands, numbering, paths, and line breaks",
+        "/inspect - 检查设置\n2. 保存文件\n/mnt/project/src", translatedList.Text);
 }
 finally
 {
@@ -321,6 +334,33 @@ await TestFixture("dialogue-survive", [
 await TestFixture("dialogue-shadow-realm", Paragraphs(realmDialogue, (365, 273), (1390, 270)));
 await TestFixture("tutorial-colored-words", Paragraphs(coloredTutorial, (541, 65), (980, 136), (1500, 138), (2010, 137), (230, 209))
     .Concat([new Sample(260, 72, false, "Shotgun"), new Sample(1500, 138, false, "fissures")]));
+var headedTutorial = Paragraphs(coloredTutorial, (705, 156), (1250, 217), (704, 270))
+    .Concat(Paragraphs("Blightkristall Fissures...", (780, 52)));
+await TestFixture("tutorial-colored-heading", headedTutorial, [1.0, 0.75, 0.5]);
+await TestFixture("tutorial-colored-heading", headedTutorial, [1.0, 0.75, 0.5], dpi: 2f);
+const string cyanDialogue = "Just a touch of drowsiness... It's nothing, really. There was indeed a time "
+    + "when I completely loathed humans. And yet, for some reason, ever since a certain day, I simply stopped finding them so distasteful.";
+var dialogueWithCyan = Paragraphs(cyanDialogue, (990, 439), (1700, 517), (2165, 529), (2440, 527), (540, 602), (1870, 598));
+await TestFixture("dialogue-cyan-emphasis", dialogueWithCyan, [1.0, 0.75, 0.5]);
+await TestFixture("dialogue-cyan-emphasis", dialogueWithCyan, [1.0, 0.75, 0.5], dpi: 2f);
+var stackedChoices = Paragraphs("You seem a little drained, Vodyanitsa.", (500, 106), (575, 172), (975, 110))
+    .Concat(Paragraphs("Vodyanitsa looks like she's been out of the water too long...", (500, 257), (700, 320), (1270, 252)));
+stackedChoices = stackedChoices.Select(sample => sample with { Chinese = "沃雅妮莎" });
+await TestFixture("dialogue-stacked-options", stackedChoices, [1.0, 0.75, 0.5]);
+await TestFixture("dialogue-stacked-options", stackedChoices, [1.0, 0.75, 0.5], dpi: 2f);
+var viewerChoices = Paragraphs("You seem a little drained, Vodyanitsa.", (390, 110), (410, 94), (575, 172), (687, 189), (975, 110))
+    .Concat(Paragraphs("Vodyanitsa looks like she's been out of the water too long...",
+        (390, 250), (410, 240), (500, 257), (700, 320), (1270, 252), (1332, 253)))
+    .Concat([
+        new Sample(331, 137, true, null), new Sample(332, 286, true, null),
+        new Sample(419, 108, false, "You"), new Sample(1010, 112, false, "drained"),
+        new Sample(530, 172, false, "Vodyanitsa"), new Sample(500, 254, false, "Vodyanitsa"),
+        new Sample(863, 253, false, "like"), new Sample(1304, 255, false, "out"),
+        new Sample(510, 319, false, "the"), new Sample(910, 320, false, "long"),
+        new Sample(331, 137, false, null), new Sample(332, 286, false, null)
+    ]);
+await TestFixture("dialogue-stacked-options", viewerChoices, [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5], game: false);
+await TestFixture("dialogue-stacked-options", viewerChoices, [1.25, 1.5, 2.0, 2.5]);
 const string explainDialogue = "(You explain what happened to Koshkin...)";
 await TestFixture("dialogue-explain", Paragraphs(explainDialogue, (420, 91), (490, 93), (567, 95), (640, 95), (340, 153))
     .Concat([new Sample(420, 91, false, "explain"), new Sample(490, 93, false, "explain"), new Sample(567, 95, false, "explain")]),
@@ -343,7 +383,7 @@ foreach (var (fontName, style, ink, background) in new[]
         graphics.DrawString("Follow the winding path", font, brush, 55, 65);
         graphics.DrawString("and open the gate.", font, brush, 55, 103);
     }
-    await TestSample(fontName, bitmap, new Sample(87, 83, true, "Follow the winding path and open the gate."), 1);
+    await TestRenderedZooms(fontName, bitmap, [new Sample(87, 83, true, "Follow the winding path and open the gate.")]);
 }
 
 using (var frame = new Bitmap(920, 360, PixelFormat.Format32bppArgb))
@@ -359,23 +399,73 @@ using (var mixedFont = new Font("Microsoft YaHei UI", 23, FontStyle.Regular, Gra
     graphics.DrawString("Desktop", desktopFont, Brushes.White, 46, 100);
     graphics.FillRectangle(Brushes.White, 340, 60, 500, 120);
     graphics.DrawString("打开Desktop设置", mixedFont, Brushes.Black, 363, 108);
-    foreach (var point in new[] { 51, 77, 100 })
-        await TestSample("desktop icon", frame, new Sample(point, 108, false, "Desktop"), 1, game: false);
-    foreach (var point in new[] { 418, 452, 494 })
-        await TestSample("English between Chinese characters", frame, new Sample(point, 121, false, "Desktop"), 1, game: false);
+    await TestRenderedZooms("desktop icon", frame, new[] { 51, 77, 100 }.Select(x => new Sample(x, 108, false, "Desktop")), game: false);
+    await TestRenderedZooms("English between Chinese characters", frame,
+        new[] { 418, 452, 494 }.Select(x => new Sample(x, 121, false, "Desktop")), game: false);
 }
 
 using (var desktop = new Bitmap(Path.Combine(fixtureRoot, "desktop-icon.png")))
 {
-    foreach (var x in new[] { 37, 72, 106 })
-        await TestSample("actual desktop icon", desktop, new Sample(x, 150, false, "Desktop"), 1, game: false);
+    await TestRenderedZooms("actual desktop icon", desktop,
+        new[] { 37, 72, 106 }.Select(x => new Sample(x, 150, false, "Desktop")), game: false);
 }
 using (var mixedText = new Bitmap(Path.Combine(fixtureRoot, "mixed-text.png")))
 {
-    foreach (var x in new[] { 91, 139, 182 })
-        await TestSample("actual mixed text", mixedText, new Sample(x, 40, false, "hatch-pet"), 1, game: false);
-    await TestSample("Chinese next to English", mixedText, new Sample(52, 40, false, null), 1, game: false);
+    await TestRenderedZooms("actual mixed text", mixedText,
+        new[] { 91, 139, 182 }.Select(x => new Sample(x, 40, false, "hatch-pet")).Append(new Sample(52, 40, false, null)),
+        game: false);
 }
+var terminalWord = new[] { 355, 430, 457, 495, 525 }.Select(x => new Sample(x, 66, false, "sites-remix"));
+await TestFixture("mixed-terminal-hyphen", terminalWord, [1.0], dpi: 1.75f, game: false);
+
+ScreenLine LayoutLine(int x, int y, int width, string text)
+{
+    var bounds = new RectangleF(x, y, width, 20);
+    return new ScreenLine([new ScreenWord(text, bounds)], bounds);
+}
+
+ScreenLine[] commands =
+[
+    LayoutLine(10, 10, 55, "/open"), LayoutLine(90, 10, 260, "Open the current workspace"),
+    LayoutLine(10, 36, 55, "[save"), LayoutLine(90, 36, 260, "Save any pending changes"),
+    LayoutLine(10, 62, 65, "/close"), LayoutLine(90, 62, 260, "Close the active document"),
+    LayoutLine(420, 36, 140, "Unrelated sidebar")
+];
+const string commandItems = "/open - Open the current workspace\n/save - Save any pending changes\n/close - Close the active document";
+Check("command column selects complete items", commandItems, TextSelection.At(commands, new Point(20, 43), true, null)?.Text);
+Check("description column selects the same items", commandItems, TextSelection.At(commands, new Point(180, 43), true, null)?.Text);
+Check("a nearby sidebar stays independent", "Unrelated sidebar", TextSelection.At(commands, new Point(450, 43), true, null)?.Text);
+Check("normal paragraph keeps its sentence across a visual wrap", "The sentence continues onto the next line in the same paragraph.",
+    TextSelection.At([LayoutLine(10, 10, 250, "The sentence continues onto the"),
+        LayoutLine(10, 36, 238, "next line in the same paragraph.")], new Point(40, 43), true, null)?.Text);
+ScreenLine[] numbered =
+[
+    LayoutLine(10, 10, 15, "1."), LayoutLine(36, 10, 250, "Install the desktop application"),
+    LayoutLine(36, 36, 240, "and open the project."), LayoutLine(10, 62, 15, "2."),
+    LayoutLine(36, 62, 220, "Review the configuration.")
+];
+const string numberedItems = "1. Install the desktop application and open the project.\n2. Review the configuration.";
+Check("an indented numbered-list continuation joins its own item", numberedItems,
+    TextSelection.At(numbered, new Point(100, 21), true, null)?.Text);
+Check("hovering an indented continuation selects the complete list", numberedItems,
+    TextSelection.At(numbered, new Point(100, 45), true, null)?.Text);
+Check("aligned key-value rows stay separate", "Build ID: 128\nTarget: Windows",
+    TextSelection.At([LayoutLine(20, 10, 150, "Build ID: 128"), LayoutLine(20, 36, 170, "Target: Windows")],
+        new Point(80, 46), true, null)?.Text);
+
+const string slashLayout = "/create an AGENTS.md file with instructions for Codex\n/show current session configuration\n"
+    + "/choose what Codex is allowed to do\n/choose what model and reasoning effort to use\n/review any changes and find issues";
+await TestFixture("terminal-command-list", new[] { 62, 530 }.Select(x =>
+    new Sample(x, 75, true, slashLayout, Project: CommandDescriptions)), [1.0], game: false);
+await TestFixture("terminal-command-list-bracket", new[] { 65, 500 }.Select(x =>
+    new Sample(x, 95, true, slashLayout, Project: CommandDescriptions)), [1.0], game: false);
+const string statusLines = "OpenAI Codex\n/mnt/d/GitDesktopRep\npermissions: YOLO mode";
+await TestFixture("terminal-status-header", new[] { 47, 77, 112 }.Select(y =>
+    new Sample(164, y, true, statusLines)), [1.0], game: false);
+
+string? CommandDescriptions(string? text) => text is null ? null : string.Join('\n', text.Split('\n').Select(item =>
+    item.StartsWith('/') && item.IndexOf(" - ", StringComparison.Ordinal) is > 0 and var separator
+        ? "/" + item[(separator + 3)..].Replace("AGENTS. md", "AGENTS.md", StringComparison.Ordinal) : item));
 
 await TestDesktopText("mixed-sidebar", [
     new(198, 169, false, "Markdown"), new(250, 169, false, "Markdown"), new(297, 170, false, "Markdown"),
@@ -397,7 +487,7 @@ await TestDesktopText("mixed-sidebar-codex", [
 ], canvasBackground: Color.FromArgb(248, 248, 250), canvasDpi: 1.75f);
 using (var sidebar = new Bitmap(Path.Combine(fixtureRoot, "mixed-sidebar-codex.png")))
 {
-    foreach (var zoom in new[] { .75, 1.25, 1.5, 1.75 })
+    foreach (var zoom in Zooms(.75, 1.25, 1.5, 1.75))
     {
         using var frame = new Bitmap(1920, (int)(sidebar.Height * zoom) + 120, PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(frame))
@@ -424,6 +514,31 @@ await TestDesktopText("muted-mixed-text", [
     new(221, 173, false, "AdGuard"), new(260, 173, false, "AdGuard"), new(307, 173, false, "AdGuard"),
     new(326, 173, false, "AdBlock"), new(367, 173, false, "AdBlock"), new(408, 173, false, "AdBlock")
 ], canvasBackground: Color.White);
+using (var muted = new Bitmap(Path.Combine(fixtureRoot, "muted-mixed-text-followup.png")))
+{
+    foreach (var zoom in Zooms(0.75, 1.0, 1.25, 1.5, 2.0))
+    {
+        using var viewer = new Bitmap(1920, 850, PixelFormat.Format32bppArgb);
+        using (var graphics = Graphics.FromImage(viewer))
+        {
+            graphics.Clear(Color.White);
+            graphics.DrawImage(muted, new Rectangle(480, 80, (int)(muted.Width * zoom), (int)(muted.Height * zoom)));
+        }
+        foreach (var (from, to, expectedWord) in new[] { (205, 300, "AdGuard"), (315, 399, "AdBlock") })
+        {
+            for (var x = from; x <= to; x += 8)
+                await TestSample($"muted-mixed-text-followup {zoom:P0}", viewer,
+                    new Sample(480 + (int)(x * zoom), 80 + (int)(168 * zoom), false, expectedWord), 1, game: false, dpi: 1.75f);
+        }
+    }
+}
+Sample[] hdrNotice =
+[
+    new(235, 188, false, "AdGuard"), new(275, 188, false, "AdGuard"), new(315, 188, false, "AdGuard"),
+    new(338, 188, false, "AdBlock"), new(379, 188, false, "AdBlock"), new(419, 188, false, "AdBlock")
+];
+foreach (var dpi in new[] { 1f, 1.75f, 2f })
+    await TestFixture("muted-mixed-text-hdr", hdrNotice, [1.0], dpi: dpi, game: false);
 await TestDesktopText("heavy-display-text", [
     new(55, 74, false, "BLUE"), new(85, 74, false, "BLUE"),
     new(101, 74, false, "SIDE"), new(124, 74, false, "SIDE"),
@@ -436,7 +551,7 @@ using (var displaySample = new Bitmap(Path.Combine(fixtureRoot, "heavy-display-t
         new(98, 65, false, "SIDE"), new(118, 74, false, "SIDE"), new(129, 81, false, "SIDE"),
         new(335, 65, false, "PICK"), new(350, 74, false, "PICK"), new(368, 81, false, "PICK")
     };
-    foreach (var zoom in new[] { 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0 })
+    foreach (var zoom in Zooms(0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0))
     {
         using var window = new Bitmap(3840, 900, PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(window))
@@ -467,10 +582,10 @@ Sample[] logoPoints = [
 await TestDesktopText("white-cutout-logo", logoPoints, canvasBackground: Color.White, canvasDpi: 1.75f);
 using (var logo = new Bitmap(Path.Combine(fixtureRoot, "white-cutout-logo.png")))
 {
-    foreach (var point in new[] { new Point(275, 53), new Point(522, 217), new Point(275, 260) })
-        await TestSample("outside white-cutout-logo", logo, new Sample(point.X, point.Y, false, null), 1, game: false);
+    await TestRenderedZooms("outside white-cutout-logo", logo,
+        [new(275, 53, false, null), new(522, 217, false, null), new(275, 260, false, null)], game: false);
 
-    foreach (var zoom in new[] { .5, .75, 1.25 })
+    foreach (var zoom in Zooms(.5, .75, 1.25))
     {
         using var window = new Bitmap(1920, 680, PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(window))
@@ -503,7 +618,7 @@ await TestDesktopText("league-scoreboard", [
 ], canvasBackground: Color.FromArgb(31, 31, 31), canvasDpi: 1.75f);
 using (var scoreboard = new Bitmap(Path.Combine(fixtureRoot, "league-scoreboard.png")))
 {
-    foreach (var zoom in new[] { 1.25, 1.75 })
+    foreach (var zoom in Zooms(1.25, 1.75))
     {
         using var window = new Bitmap(3840, 540, PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(window))
@@ -529,21 +644,27 @@ Check("Explorer non-English label", null, DesktopLabels.FromName("回收站", ne
 async Task TestDesktopText(string name, Sample[] samples, Color? canvasBackground = null, float canvasDpi = 1)
 {
     using var image = new Bitmap(Path.Combine(fixtureRoot, name + ".png"));
-    foreach (var sample in samples)
-        await TestSample(name, image, sample, 1, game: false);
+    await TestRenderedZooms(name, image, samples, game: false);
     if (canvasBackground is not { } background)
         return;
 
-    using var canvas = new Bitmap((int)(1920 * canvasDpi), Math.Max(540, image.Height + 170), PixelFormat.Format32bppArgb);
-    using (var graphics = Graphics.FromImage(canvas))
+    foreach (var zoom in Zooms(1))
     {
-        graphics.Clear(background);
-        graphics.DrawImage(image, new Rectangle(700, 85, image.Width, image.Height),
-            0, 0, image.Width, image.Height, GraphicsUnit.Pixel);
+        var width = (int)(image.Width * zoom);
+        var height = (int)(image.Height * zoom);
+        using var canvas = new Bitmap(Math.Max((int)(1920 * canvasDpi), width + 701),
+            Math.Max(540, height + 170), PixelFormat.Format32bppArgb);
+        using (var graphics = Graphics.FromImage(canvas))
+        {
+            graphics.Clear(background);
+            graphics.DrawImage(image, new Rectangle(700, 85, width, height),
+                0, 0, image.Width, image.Height, GraphicsUnit.Pixel);
+        }
+        foreach (var sample in samples)
+            await TestSample(zoom == 1 ? name + " inside window" : $"{name} inside window at {zoom:P0}", canvas,
+                sample with { X = 700 + (int)(sample.X * zoom), Y = 85 + (int)(sample.Y * zoom) }, 1,
+                game: false, dpi: canvasDpi);
     }
-    foreach (var sample in samples)
-        await TestSample(name + " inside window", canvas, sample with { X = sample.X + 700, Y = sample.Y + 85 }, 1,
-            game: false, dpi: canvasDpi);
 }
 
 Console.WriteLine($"{checks - failures}/{checks} checks passed.");
@@ -559,7 +680,7 @@ Selection? SelectWords(string text, TermGlossary? glossary, int hoverX = 30)
 IEnumerable<Sample> Paragraphs(string text, params (int X, int Y)[] points) =>
     points.Select(point => new Sample(point.X, point.Y, true, text));
 
-async Task TestFixture(string name, IEnumerable<Sample> samples, double[]? ratios = null)
+async Task TestFixture(string name, IEnumerable<Sample> samples, double[]? ratios = null, float dpi = 1f, bool game = true)
 {
     var path = Path.Combine(fixtureRoot, name + ".png");
     if (!File.Exists(path))
@@ -568,12 +689,19 @@ async Task TestFixture(string name, IEnumerable<Sample> samples, double[]? ratio
         return;
     }
     using var image = new Bitmap(path);
-    foreach (var ratio in ratios ?? [1.0, 0.5])
+    await TestRenderedZooms(name, image, samples, game, dpi, ratios ?? [1.0, 0.5]);
+}
+
+IEnumerable<double> Zooms(params double[] existing) => zoomMatrix ? requiredZooms : existing;
+
+async Task TestRenderedZooms(string name, Bitmap image, IEnumerable<Sample> samples, bool game = true,
+    float dpi = 1f, double[]? ratios = null)
+{
+    foreach (var ratio in Zooms(ratios ?? [1.0]))
     {
-        using var frame = ratio == 1 ? image.Clone(new Rectangle(Point.Empty, image.Size), PixelFormat.Format32bppArgb)
-            : new Bitmap(image, (int)(image.Width * ratio), (int)(image.Height * ratio));
+        using var resized = ratio == 1 ? null : new Bitmap(image, (int)(image.Width * ratio), (int)(image.Height * ratio));
         foreach (var sample in samples)
-            await TestSample(name, frame, sample, ratio);
+            await TestSample(name, resized ?? image, sample, ratio, game: game, dpi: dpi);
     }
 }
 
@@ -584,10 +712,10 @@ async Task TestSample(string name, Bitmap frame, Sample sample, double ratio, bo
     var capture = HoverRecognition.CaptureArea(area, cursor, dpi, sample.Paragraph);
     var wider = sample.Paragraph ? capture : HoverRecognition.CaptureArea(area, cursor, dpi, false, expanded: true);
     var (target, _) = await HoverRecognition.ReadAsync(area, capture, wider, cursor, sample.Paragraph,
-        game, game ? genshin : null, Read, default);
+        game, game ? genshin : null, Read, default, ReadOption);
     var actual = target is null ? null : game ? genshin.CorrectOcr(target.Text) : target.Text;
     var description = $"{name} {ratio} ({sample.X},{sample.Y}) {(sample.Paragraph ? "paragraph" : "word")}";
-    Check(description, sample.Expected, actual);
+    Check(description, sample.Expected, sample.Project is null ? actual : sample.Project(actual));
     if (sample.Chinese is { } chinese && actual is not null && actual == sample.Expected)
     {
         var term = target?.Term ?? genshin.Find(actual).SingleOrDefault()?.Chinese;
@@ -600,6 +728,12 @@ async Task TestSample(string name, Bitmap frame, Sample sample, double ratio, bo
         using var bitmap = frame.Clone(region, PixelFormat.Format32bppArgb);
         return await ocr.ReadBitmapAsync(bitmap, region.Location, scale, point, hasTarget, token, allowMixedText, largeDisplayOnly, paragraph);
     }
+
+    async Task<ScreenLine[]?> ReadOption(Rectangle region, Point point, CancellationToken token)
+    {
+        using var bitmap = frame.Clone(region, PixelFormat.Format32bppArgb);
+        return await ocr.ReadOptionBitmapAsync(bitmap, region.Location, point, token);
+    }
 }
 
 void Check(string subject, string? expected, string? actual)
@@ -611,4 +745,5 @@ void Check(string subject, string? expected, string? actual)
     Console.Error.WriteLine($"{subject}\n  expected: {expected ?? "(none)"}\n  actual:   {actual ?? "(none)"}");
 }
 
-internal sealed record Sample(int X, int Y, bool Paragraph, string? Expected, string? Chinese = null);
+internal sealed record Sample(int X, int Y, bool Paragraph, string? Expected, string? Chinese = null,
+    Func<string?, string?>? Project = null);
