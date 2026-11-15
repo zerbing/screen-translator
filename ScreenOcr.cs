@@ -144,7 +144,8 @@ internal sealed partial class ScreenOcr : IDisposable
             }
         }
 
-        if (hasTarget is not null && LightLetteringCutoff(original, new Point(cursor.X - origin.X, cursor.Y - origin.Y)) is { } cutoff)
+        if (hasTarget is not null && LightLetteringCutoff(original, local) is { } cutoff
+            && !HasDarkTextOnLightBackground(SampleLuminance(original, local)))
         {
             token.ThrowIfCancellationRequested();
             using var mask = LightTextMask(original, cutoff, token);
@@ -466,6 +467,14 @@ internal sealed partial class ScreenOcr : IDisposable
     }
 
     private static int Luminance(int red, int green, int blue) => (77 * red + 150 * green + 29 * blue + 128) >> 8;
+
+    private static bool HasDarkTextOnLightBackground(int[] luminance)
+    {
+        var samples = luminance.Sum();
+        var light = luminance.Skip(190).Sum();
+        var dark = luminance.Take(135).Sum();
+        return light * 3 >= samples * 2 && dark * 10 >= samples;
+    }
 
     internal static bool IsHan(char letter) => letter is >= '\u3400' and <= '\u4DBF' or >= '\u4E00' and <= '\u9FFF'
         or >= '\uF900' and <= '\uFAFF';

@@ -1,5 +1,6 @@
 using System.Drawing.Imaging;
 using System.Drawing.Text;
+using System.Text.Json;
 using ScreenTranslator;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -15,6 +16,10 @@ try
     var selectedOptions = new AppSettings(SupportedAppsOnly: true, DefaultParagraph: true, Paused: true, UseDeepSeek: true);
     Check("save selected settings", "True", settingsStore.Save(selectedOptions).ToString());
     Check("reload selected settings", selectedOptions.ToString(), new AppSettingsStore(settingsPath).Load().ToString());
+    Check("preserve legacy DeepSeek selection", OnlineEngine.DeepSeek.ToString(), settingsStore.Load().SelectedEngine.ToString());
+    var baiduOptions = selectedOptions with { UseDeepSeek = false, Engine = OnlineEngine.Baidu };
+    Check("save Baidu selection", "True", settingsStore.Save(baiduOptions).ToString());
+    Check("reload Baidu selection", baiduOptions.ToString(), new AppSettingsStore(settingsPath).Load().ToString());
     var updated = selectedOptions with { SupportedAppsOnly = false, Paused = false };
     Check("save unchecked settings", "True", settingsStore.Save(updated).ToString());
     Check("reload unchecked settings", updated.ToString(), new AppSettingsStore(settingsPath).Load().ToString());
@@ -27,6 +32,23 @@ finally
 {
     File.Delete(settingsPath);
     File.Delete(settingsPath + ".tmp");
+}
+
+var credentialsPath = Path.Combine(Path.GetTempPath(), $"screen-translator-credentials-{Guid.NewGuid():N}.dat");
+try
+{
+    const string fixture = "not-a-real-key-for-dpapi-test";
+    var store = new TranslationCredentialStore(credentialsPath);
+    Check("save local credentials", "True", store.Save(new TranslationCredentials { DeepSeekApiKey = fixture }).ToString());
+    Check("credentials round trip for the same Windows user", "True",
+        (store.Load().DeepSeekApiKey == fixture).ToString());
+    Check("credential file contains no plaintext key", "False",
+        System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(credentialsPath)).Contains(fixture, StringComparison.Ordinal).ToString());
+}
+finally
+{
+    File.Delete(credentialsPath);
+    File.Delete(credentialsPath + ".tmp");
 }
 var ocr = ScreenOcr.Create() ?? throw new InvalidOperationException("Windows English OCR is required.");
 var applications = new ApplicationGlossaries();
@@ -44,7 +66,15 @@ var glossaryCases = new (string Process, string English, string Chinese)[]
     ("WINWORD", "Mail Merge", "邮件合并"), ("POWERPNT", "Slide Master", "幻灯片母版"),
     ("PBIDesktop", "Measure", "度量值"), ("Code", "Command Palette", "命令面板"),
     ("devenv", "Solution Explorer", "解决方案资源管理器"), ("blender", "Object Mode", "物体模式"),
-    ("Photoshop", "Layer Mask", "图层蒙版"), ("obs64", "Replay Buffer", "回放缓存")
+    ("Photoshop", "Layer Mask", "图层蒙版"), ("obs64", "Replay Buffer", "回放缓存"),
+    ("StarRail", "Self-Modeling Resin", "自塑尘脂"), ("ZenlessZoneZero", "Mindscape Cinema", "意象影画"),
+    ("Minecraft.Windows", "Swift Sneak", "迅捷潜行"), ("LeagueClientUx", "Aatrox", "亚托克斯"),
+    ("LeagueClientUx", "the Darkin Blade", "暗裔剑魔"), ("LeagueClientUx", "Infinity Edge", "无尽之刃"),
+    ("VALORANT-Win64-Shipping", "Phantom", "幻影"), ("EXCEL", "Quick Analysis", "快速分析"),
+    ("WINWORD", "Repeat Header Rows", "重复标题行"), ("POWERPNT", "Animation Painter", "动画刷"),
+    ("PBIDesktop", "Unpivot Other Columns", "逆透视其他列"), ("Code", "Stage Changes", "暂存更改"),
+    ("devenv", "Data Breakpoint", "数据断点"), ("blender", "Merge by Distance", "按距离合并"),
+    ("Photoshop", "Object Selection Tool", "对象选择工具"), ("obs64", "Audio Monitoring", "音频监听")
 };
 
 using (var translator = new Translator())
@@ -69,6 +99,19 @@ using (var translator = new Translator())
     Check("demo paragraph glossary", "地脉异常,风龙废墟,蒙德",
         string.Join(',', demo?.Find(demoParagraph).Select(hit => hit.Chinese) ?? []));
     Check("demo glossary is scoped to the main window", null, applications.ForProcess("ScreenTranslator")?.Id);
+
+    const string greeting = "Ad astra abyssosque!";
+    const string greetingTranslation = "向着星辰与深渊！";
+    foreach (var line in new[] { greeting, "Ad astra abyssosque" })
+    {
+        var greetingParagraph = await translator.TranslateAsync(new Selection(line, "", RectangleF.Empty),
+            true, genshin, null, default);
+        Check($"Genshin greeting paragraph {line}", greetingTranslation, greetingParagraph.Text);
+        Check($"Genshin greeting offline source {line}", genshin.Source, greetingParagraph.Source);
+    }
+    Check("Genshin greeting leaves word selection unchanged", "abyssosque", SelectWords(greeting, genshin, 230)?.Text);
+    Check("Genshin greeting has no standalone abyssosque term", null, genshin.FindParagraphLabel("abyssosque"));
+    Check("Genshin greeting glossary isolation", null, league.FindParagraphLabel(greeting));
 }
 Check("unknown app", null, applications.ForProcess("chrome")?.Id);
 Check("unsupported app in supported mode", "False", applications.IsSupported("chrome").ToString());
@@ -86,10 +129,103 @@ Check("use term inside paragraph", "数据透视表", excel.Find("Insert a Pivot
 Check("common preposition", "in", SelectWords("in", genshin)?.Text);
 Check("common phrase", "in front of", SelectWords("in front of the gate", null)?.Text);
 Check("preposition sense", "离线释义", SelectWords("in", null)?.TermSource);
+using (var translator = new Translator())
+{
+    foreach (var (english, chinese) in new[] { ("survive", "活下来"), ("Foreman", "工头"), ("café", "咖啡"), ("survived", "幸存") })
+    {
+        var selected = new Selection(english, english, RectangleF.Empty);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        var meaning = await translator.TranslateAsync(selected, false, null, null, deadline.Token);
+        Check($"{english} ECDICT definition", "True", meaning.Text.Contains(chinese, StringComparison.Ordinal).ToString());
+        Check($"{english} ECDICT source", OfflineDictionary.Source, meaning.Source);
+    }
+    var champion = SelectWords("Flash", league)!;
+    var spell = await translator.TranslateAsync(champion, false, league, null, default);
+    Check("application term takes precedence over ECDICT", "闪现", spell.Text);
+    Check("application term retains source", league.Source, spell.Source);
+}
+Check("new League items stay in League", null, SelectWords("Infinity Edge", genshin)?.Term);
+var valorant = applications.ForProcess("VALORANT-Win64-Shipping")!;
+Check("ambiguous weapon name stays a label", "0", valorant.Find("A phantom appeared.").Count().ToString());
 var sharedText = new Selection("Select a range.", "", RectangleF.Empty);
 var keys = new[] { excel, word, league, genshin, null }.Select(
     glossary => Translator.CacheKey(sharedText, true, glossary, false, [])).ToHashSet();
 Check("cache is isolated by app glossary", "5", keys.Count.ToString());
+var baiduCredentials = new BaiduCredentials("fixture-app", "fixture-secret");
+Check("Baidu signs UTF-8 text before form encoding", "ec21681ff09f32cb68fb9ea2f21fa9df", baiduCredentials.Sign("Ice & stone.", "1234"));
+using (var response = JsonDocument.Parse("""{"from":"en","to":"zh","trans_result":[{"dst":"第一段。"},{"dst":"第二段。"}]}"""))
+    Check("Baidu response preserves line order", "第一段。\n第二段。", Translator.ParseBaidu(response.RootElement));
+using (var response = JsonDocument.Parse("""{"error_code":"52003","error_msg":"UNAUTHORIZED USER"}"""))
+{
+    try
+    {
+        Translator.ParseBaidu(response.RootElement);
+        Check("Baidu authorization errors point to credentials", "authentication error", "no error");
+    }
+    catch (TranslationAuthenticationException)
+    {
+        Check("Baidu authorization errors point to credentials", "authentication error", "authentication error");
+    }
+}
+
+using (var response = JsonDocument.Parse("""
+    {"responseStatus":200,"responseData":{"translatedText":"mandor"},"matches":[
+      {"segment":"foreman","target":"zh-CN","translation":"mandor"},
+      {"segment":"old foreman","target":"zh-CN","translation":"老工头"},
+      {"segment":"foreman","target":"ja-JP","translation":"現場監督"},
+      {"segment":"foreman","target":"zh-CN","translation":"n.工头 ,领班,陪审团主席,陪审长"}
+    ]}
+    """))
+{
+    Check("MyMemory picks a Chinese match for the exact word", "n.工头 ,领班,陪审团主席,陪审长",
+        Translator.ParseMyMemory(response.RootElement, "Foreman"));
+    try
+    {
+        Translator.ParseMyMemory(response.RootElement, "the foreman");
+        Check("MyMemory skips unrelated segments", "no translation", "wrong segment");
+    }
+    catch (NoTranslationException)
+    {
+        Check("MyMemory skips unrelated segments", "no translation", "no translation");
+    }
+}
+
+using (var response = JsonDocument.Parse("""
+    {"responseStatus":200,"responseData":{"translatedText":"耐 耐 [nai4]"},"matches":[
+      {"segment":"survive","target":"zh-CN","translation":"耐 耐 [nai4]"},
+      {"segment":"survive","target":"zh-CN","translation":"活下来，幸存"}
+    ]}
+    """))
+{
+    Check("MyMemory skips raw pinyin entries", "活下来，幸存", Translator.ParseMyMemory(response.RootElement, "survive"));
+}
+
+var cachePath = Path.Combine(Path.GetTempPath(), $"screen-translator-translation-{Guid.NewGuid():N}.json");
+try
+{
+    var cache = new TranslationCache(cachePath);
+    var hello = new Selection("qzxqzxunlisted", "qzxqzxunlisted", RectangleF.Empty);
+    var goodbye = new Selection("cached farewell", "cached farewell", RectangleF.Empty);
+    var apple = new Selection("apple", "apple", RectangleF.Empty);
+    await cache.StoreAsync(Translator.CacheKey(hello, false, null, false, []), new TranslationResult("你好"));
+    await cache.StoreAsync(Translator.CacheKey(goodbye, false, null, false, []), new TranslationResult("再见", "MyMemory"));
+    await cache.StoreAsync(Translator.CacheKey(goodbye, false, null, false, [], OnlineEngine.Baidu), new TranslationResult("下次见", "百度翻译"));
+    await cache.StoreAsync(Translator.CacheKey(apple, true, null, false, []), new TranslationResult("苹果。", "MyMemory"));
+    using var translator = new Translator(cachePath);
+    var legacy = await translator.TranslateAsync(hello, false, null, null, default);
+    var myMemory = await translator.TranslateAsync(goodbye, false, null, null, default);
+    Check("legacy cache displays original Google source", "Google", legacy.Source);
+    Check("cache preserves MyMemory source", "MyMemory", myMemory.Source);
+    var baidu = await translator.TranslateAsync(goodbye, false, null, null, default, baiduCredentials, OnlineEngine.Baidu);
+    Check("Baidu uses its own online cache", "百度翻译", baidu.Source);
+    var paragraph = await translator.TranslateAsync(apple, true, null, null, default);
+    Check("paragraph mode skips ECDICT", "MyMemory", paragraph.Source);
+}
+finally
+{
+    File.Delete(cachePath);
+    File.Delete(cachePath + ".tmp");
+}
 
 const string quest = "Use the lamp crystal to light up the secret message";
 await TestFixture("world-map", new (int X, int Y, string Name, string Chinese)[]
@@ -160,6 +296,22 @@ await TestFixture("npc-name", new[] { 2390, 2440, 2490, 2540, 2600 }.SelectMany(
 {
     new Sample(x, 425, false, "Lawrence"), new Sample(x, 425, true, "Lawrence")
 }).Concat(Paragraphs("<Knight of Favonius>", (2450, 480), (2580, 485))));
+
+await TestFixture("dark-text-ice-you", [
+    new Sample(1000, 338, false, "you"), new Sample(1038, 339, false, "you"),
+    new Sample(1018, 346, false, "you"), new Sample(930, 339, false, "with")
+]);
+await TestFixture("dark-text-ice-domovoy", [
+    new Sample(695, 73, false, "Domovoy"), new Sample(718, 73, false, "Domovoy"),
+    new Sample(737, 73, false, "Domovoy"), new Sample(774, 69, false, "Domovoy"),
+    new Sample(921, 71, false, "for")
+]);
+await TestFixture("domovoy-foreman", [new Sample(2065, 166, false, "foreman"), new Sample(2250, 166, false, "foreman")]);
+await TestFixture("dialogue-survive", [
+    new Sample(1020, 268, false, "survive"),
+    new Sample(1110, 268, false, "survive"),
+    new Sample(1193, 268, false, "survive")
+]);
 
 foreach (var (fontName, style, ink, background) in new[]
 {
@@ -384,11 +536,11 @@ async Task TestDesktopText(string name, Sample[] samples, Color? canvasBackgroun
 Console.WriteLine($"{checks - failures}/{checks} checks passed.");
 return failures == 0 ? 0 : 1;
 
-Selection? SelectWords(string text, TermGlossary? glossary)
+Selection? SelectWords(string text, TermGlossary? glossary, int hoverX = 30)
 {
     var words = text.Split(' ').Select((value, index) =>
         new ScreenWord(value, new RectangleF(index * 100, 20, 80, 20)));
-    return TextSelection.At(ScreenOcr.BuildLines(words).ToArray(), new Point(30, 30), false, glossary);
+    return TextSelection.At(ScreenOcr.BuildLines(words).ToArray(), new Point(hoverX, 30), false, glossary);
 }
 
 IEnumerable<Sample> Paragraphs(string text, params (int X, int Y)[] points) =>

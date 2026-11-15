@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Net;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -22,9 +24,18 @@ internal sealed class TranslatorApp : ApplicationContext
     private readonly ToolStripMenuItem pause = new("暂停") { CheckOnClick = true };
     private readonly ToolStripMenuItem supportedAppsOnly = new("仅在已适配的应用中启用") { CheckOnClick = true };
     private readonly ToolStripMenuItem paragraph = new("默认翻译段落") { CheckOnClick = true };
-    private readonly ToolStripMenuItem ai = new("使用 DeepSeek 上下文翻译") { CheckOnClick = true };
     private readonly AppSettingsStore settingsStore = AppSettingsStore.ForCurrentUser();
-    private readonly string? apiKey = GetApiKey();
+    private readonly TranslationCredentialStore credentialStore = TranslationCredentialStore.ForCurrentUser();
+    private readonly TranslationCredentials environmentCredentials = new()
+    {
+        BaiduAppId = ReadCredential("SCREEN_TRANSLATOR_BAIDU_APP_ID"),
+        BaiduSecretKey = ReadCredential("SCREEN_TRANSLATOR_BAIDU_SECRET_KEY"),
+        DeepSeekApiKey = ReadCredential("SCREEN_TRANSLATOR_DEEPSEEK_API_KEY")
+    };
+    private TranslationCredentials savedCredentials;
+    private string? apiKey;
+    private BaiduCredentials? baiduCredentials;
+    private OnlineEngine activeEngine;
     private readonly ScreenOcr? ocr;
     private DemoWindow? mainWindow;
     private IntPtr targetWindow;
@@ -44,27 +55,26 @@ internal sealed class TranslatorApp : ApplicationContext
     private CancellationTokenSource? pending;
     private bool busy;
     private bool exiting;
+    private bool editingSettings;
     private AppSettings settings;
 
     public TranslatorApp()
     {
         translator = new Translator();
         settings = settingsStore.Load();
+        savedCredentials = credentialStore.Load();
         pause.Checked = settings.Paused;
         supportedAppsOnly.Checked = settings.SupportedAppsOnly;
         paragraph.Checked = settings.DefaultParagraph;
-        ai.Enabled = apiKey is not null;
-        ai.Checked = ai.Enabled && settings.UseDeepSeek;
-        if (apiKey is null)
-            ai.ToolTipText = "设置 SCREEN_TRANSLATOR_DEEPSEEK_API_KEY 后重启软件即可启用";
+        ApplyOnlineSettings();
 
         pause.CheckedChanged += SettingsChanged;
         supportedAppsOnly.CheckedChanged += SettingsChanged;
         paragraph.CheckedChanged += SettingsChanged;
-        ai.CheckedChanged += SettingsChanged;
         menu.Opening += (_, _) => ResetHover();
-        menu.Items.AddRange([new ToolStripMenuItem("打开主界面", null, (_, _) => ShowMainWindow()), new ToolStripSeparator(),
-            pause, supportedAppsOnly, paragraph, ai, new ToolStripSeparator(),
+        menu.Items.AddRange([new ToolStripMenuItem("打开主界面", null, (_, _) => ShowMainWindow()),
+            new ToolStripMenuItem("翻译设置…", null, (_, _) => ShowTranslationSettings()), new ToolStripSeparator(),
+            pause, supportedAppsOnly, paragraph, new ToolStripSeparator(),
             new ToolStripMenuItem("退出", null, (_, _) => ExitThread())]);
 
         tray = new NotifyIcon { Icon = appIcon ?? SystemIcons.Application, ContextMenuStrip = menu, Visible = true };
@@ -87,7 +97,7 @@ internal sealed class TranslatorApp : ApplicationContext
         ResetHover();
         if (mainWindow is null)
         {
-            mainWindow = new DemoWindow();
+            mainWindow = new DemoWindow(ShowTranslationSettings);
             mainWindow.FormClosed += (_, _) => { mainWindow = null; ResetHover(); };
             mainWindow.Show();
         }
@@ -171,7 +181,8 @@ internal sealed class TranslatorApp : ApplicationContext
             if (glossary is not null)
                 target = target with { Text = glossary.CorrectOcr(target.Text), Context = glossary.CorrectOcr(target.Context) };
 
-            var operation = translator.TranslateAsync(target, readParagraph, glossary, ai.Checked ? apiKey : null, request.Token);
+            var operation = translator.TranslateAsync(target, readParagraph, glossary, apiKey,
+                request.Token, baiduCredentials, activeEngine);
             if (!operation.IsCompleted)
             {
                 // Only show loading feedback when the network takes long enough to notice.
@@ -182,14 +193,23 @@ internal sealed class TranslatorApp : ApplicationContext
 
             var translated = await operation;
             if (StillHovering(request, window, cursor, readParagraph))
-                popup.Present(target.Text, translated.Text, translated.Source, target.Bounds, cursor, window);
-
+            {
+                var source = translated.TermsMayBeMissing ? $"{translated.Source} · 术语可能有遗漏" : translated.Source;
+                popup.Present(target.Text, translated.Text, source, target.Bounds, cursor, window);
+            }
         }
         catch (Exception error) when (Translator.IsServiceError(error) || error is Win32Exception or ExternalException)
         {
             if (StillHovering(request, window, cursor, readParagraph))
             {
-                var message = error is ExternalException or Win32Exception ? "读取屏幕失败" : "联网翻译暂不可用，请检查连接后重试";
+                var message = error switch
+                {
+                    ExternalException or Win32Exception => "读取屏幕失败",
+                    NoTranslationException => "未查到中文译文",
+                    TranslationAuthenticationException or HttpRequestException { StatusCode: HttpStatusCode.Unauthorized }
+                        => "翻译服务认证失败，请检查翻译设置中的密钥",
+                    _ => "联网翻译暂不可用，请检查连接后重试"
+                };
                 popup.Present("", message, null, RectangleF.Empty, cursor, window);
             }
         }
@@ -213,7 +233,7 @@ internal sealed class TranslatorApp : ApplicationContext
         window = IntPtr.Zero;
         point = default;
         readParagraph = false;
-        if (exiting || pause.Checked || ocr is null || menu.Visible
+        if (exiting || editingSettings || pause.Checked || ocr is null || menu.Visible
             || !Desktop.TryCursor(out point, out var visible)
             || Desktop.IsDown(Desktop.LeftMouse) || Desktop.IsDown(Desktop.RightMouse))
             return false;
@@ -289,14 +309,52 @@ internal sealed class TranslatorApp : ApplicationContext
     {
         ResetHover();
         UpdateTray();
-        settings = new AppSettings(supportedAppsOnly.Checked, paragraph.Checked, pause.Checked,
-            ai.Enabled ? ai.Checked : settings.UseDeepSeek);
+        settings = settings with { SupportedAppsOnly = supportedAppsOnly.Checked, DefaultParagraph = paragraph.Checked, Paused = pause.Checked };
         if (!settingsStore.Save(settings))
             tray.ShowBalloonTip(4000, "设置保存失败", "请检查本地应用数据目录是否可写。", ToolTipIcon.Warning);
     }
 
-    private static string? GetApiKey() => (Environment.GetEnvironmentVariable("SCREEN_TRANSLATOR_DEEPSEEK_API_KEY")
-        ?? Environment.GetEnvironmentVariable("SCREEN_TRANSLATOR_DEEPSEEK_API_KEY", EnvironmentVariableTarget.User))
+    private void ApplyOnlineSettings()
+    {
+        var selected = settings.SelectedEngine;
+        apiKey = selected == OnlineEngine.DeepSeek ? savedCredentials.DeepSeekApiKey ?? environmentCredentials.DeepSeekApiKey : null;
+        baiduCredentials = selected == OnlineEngine.Baidu ? savedCredentials.GetBaidu() ?? environmentCredentials.GetBaidu() : null;
+        activeEngine = selected switch
+        {
+            OnlineEngine.Baidu when baiduCredentials is null => OnlineEngine.Automatic,
+            OnlineEngine.DeepSeek when apiKey is null => OnlineEngine.Automatic,
+            _ => selected
+        };
+    }
+
+    private void ShowTranslationSettings()
+    {
+        if (editingSettings)
+            return;
+
+        ResetHover();
+        editingSettings = true;
+        try
+        {
+            using var dialog = new TranslationSettingsWindow(settings.SelectedEngine, savedCredentials, environmentCredentials);
+            if (dialog.ShowDialog(mainWindow) != DialogResult.OK)
+                return;
+            if (!credentialStore.Save(dialog.Credentials))
+            {
+                MessageBox.Show(mainWindow, "无法保存本机密钥，请检查应用数据目录是否可写。", "翻译设置",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            savedCredentials = dialog.Credentials;
+            settings = settings with { Engine = dialog.Engine, UseDeepSeek = dialog.Engine == OnlineEngine.DeepSeek };
+            ApplyOnlineSettings();
+            SettingsChanged(null, EventArgs.Empty);
+        }
+        finally { editingSettings = false; }
+    }
+
+    private static string? ReadCredential(string name) => (Environment.GetEnvironmentVariable(name)
+        ?? Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.User))
         ?.Trim() is { Length: > 0 } key ? key : null;
 
     protected override void ExitThreadCore()

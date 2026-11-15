@@ -29,3 +29,105 @@ Assist Follow-Up	支援突击
 Dodge Counter	闪避反击
 EX Special Attack	强化特殊技
 Corruption	侵蚀
+
+# 代理人养成、招募、空洞探索与战斗
+# 参考：https://zenless.hoyoverse.com/
+Agent	代理人	label
+Proxies	绳匠	label
+Proxy Level	绳匠等级
+Inter-Knot Level	绳网等级
+Signal Search	调频
+Exclusive Channel	独家频段
+W-Engine Channel	音擎频段
+Stable Channel	常驻频段
+Bangboo Channel	邦布频段
+Residual Signal	余波信号
+Fading Signal	回响信号
+W-Engine Modification	音擎改装
+W-Engine Upgrade	音擎升级
+Agent Promotion	代理人晋升
+Core Skill	核心技
+Core Passive	核心被动
+Additional Ability	额外能力
+Mindscape Cinema	意象影画
+Basic Attack	普通攻击
+Dash Attack	冲刺攻击
+Special Attack	特殊技
+Switch Agent	切换代理人
+Perfect Dodge	极限闪避
+Perfect Assist	极限支援
+Perfect Guard	极限格挡
+Decibel Rating	喧响等级
+Decibels	喧响值	label
+Energy Regeneration	能量自动回复
+PEN Ratio	穿透率
+CRIT Rate	暴击率
+CRIT DMG	暴击伤害
+Attribute Anomaly	属性异常
+Anomaly DMG	异常伤害
+Frostburn	霜灼
+Disorder	紊乱	label
+Daze Multiplier	失衡倍率
+Stun DMG Multiplier	失衡易伤倍率
+Bangboo Skill	邦布技能
+Bangboo Chain Attack	邦布连携技
+Resonia	鸣徽
+Hollow	空洞	label
+Hollow Investigation Association	空洞调查协会
+Scott Outpost	斯科特哨站
+Sixth Street	六分街
+Lumina Square	光映广场
+Ballet Twins Road	芭莱大厦前
+Brant Street Construction Site	黑雁工地旧址
+Blazewood	野火镇
+Outer Ring	外环
+Port Elpis	厄匹斯港
+Random Play	Random Play 录像店	label
+Video Store	录像店
+Trust Event	信赖事件
+Trust Rank	信赖等级
+Agent Story	代理人秘闻
+Combat Commission	战斗委托
+Exploration Commission	探索委托
+Story Commission	剧情委托
+Deadly Assault	危局强袭战
+Expert Challenge	专业挑战室
+Lost Void	迷失之地
+Withering Garden	枯萎花圃
+Ether Activity	以太活性
+Drive Disc Tuning	驱动盘调律
+Tuning Calibrator	调律校音器
+Cunning Hares	狡兔屋
+Belobog Heavy Industries	白祇重工
+Victoria Housekeeping	维多利亚家政
+Sons of Calydon	卡吕冬之子
+Criminal Investigation Special Response Team	刑侦特勤组
+Obol Squad	奥波勒斯小队
+Hollow Special Operations Section 6	对空特别行动部第六课
+Anby Demara	安比·德玛拉
+Nicole Demara	妮可·德玛拉
+Billy Kid	比利·奇德
+Nekomiya Mana	猫宫又奈
+Koleda Belobog	珂蕾妲·贝洛伯格
+Anton Ivanov	安东·伊万诺夫
+Ben Bigger	本·比格
+Grace Howard	格莉丝·霍华德
+Von Lycaon	冯·莱卡恩
+Ellen Joe	艾莲·乔
+Alexandrina Sebastiane	亚历山德丽娜·莎芭丝缇安
+Corin Wickes	可琳·威克斯
+Zhu Yuan	朱鸢
+Qingyi	青衣
+Jane Doe	简·杜
+Seth Lowell	赛斯·洛威尔
+Caesar King	凯撒·金
+Burnice White	柏妮思·怀特
+Piper Wheel	派派·韦尔
+Lucy	露西	label
+Lighter	莱特	label
+Asaba Harumasa	浅羽悠真
+Tsukishiro Yanagi	月城柳
+Hoshimi Miyabi	星见雅
+Soukaku	苍角
+Astra Yao	耀嘉音
+Evelyn Chevalier	伊芙琳·舒瓦利耶

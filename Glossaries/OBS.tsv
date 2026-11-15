@@ -29,3 +29,71 @@ Virtual Camera	虚拟摄像机
 Dropped Frames	丢帧
 Bitrate	码率
 Keyframe Interval	关键帧间隔
+
+# 采集、混音、编码和输出
+# 参考：https://github.com/obsproject/obs-studio/tree/master/frontend/data/locale
+Application Audio Capture	应用程序音频采集
+Image Slide Show	图像幻灯片
+Text (GDI+)	文本 (GDI+)
+Source Visibility	源可见性
+Capture Cursor	采集光标
+Capture Method	采集方式
+Window Match Priority	窗口匹配优先级
+Capture Specific Window	采集指定窗口
+Capture Any Fullscreen Application	采集任何全屏应用程序
+Capture Foreground Window with Hotkey	使用热键采集前台窗口
+Add Existing	添加现有源	label
+Edit Transform	编辑变换
+Reset Transform	重置变换
+Fit to Screen	比例适配屏幕
+Stretch to Screen	拉伸到全屏
+Center to Screen	屏幕居中
+Scaling Filter	缩放滤镜
+Lock Preview	锁定预览
+Preview Scaling	预览缩放
+Multiview (Fullscreen)	多视图（全屏）
+Fullscreen Projector	全屏投影
+Windowed Projector	窗口投影
+Transition Override	转场覆盖
+Transition Duration	转场时长
+Stinger Transition	特效转场
+Audio Monitoring	音频监听
+Monitoring Device	监听设备
+Monitor Off	关闭监听
+Monitor Only (mute output)	仅监听（输出静音）
+Monitor and Output	监听并输出
+Sync Offset	同步偏移
+Audio Track	音轨
+Audio Encoder	音频编码器
+Desktop Audio	桌面音频
+Push-to-Talk	按键说话
+Push-to-Mute	按键静音
+Close Threshold	关闭阈值
+Open Threshold	打开阈值
+Gain Filter	增益滤镜
+Sidechain/Ducking Source	侧链/闪避源
+Color Correction	色彩校正
+Crop/Pad	裁剪/填充
+Image Mask/Blend	图像遮罩/混合
+Base (Canvas) Resolution	基础（画布）分辨率
+Output (Scaled) Resolution	输出（缩放）分辨率
+Downscale Filter	缩小滤镜
+Common FPS Values	常用 FPS 值
+Output Mode	输出模式
+Rescale Output	重新缩放输出
+Recording Path	录像路径
+Recording Format	录像格式
+Video Encoder	视频编码器
+Rate Control	码率控制
+Constant Bitrate	恒定码率
+Variable Bitrate	可变码率
+Constant QP	恒定量化参数
+Look-ahead	前瞻
+Psycho Visual Tuning	心理视觉调整
+Max B-frames	最大 B 帧数
+Dynamically Change Bitrate	动态调整码率
+Encoder Overloaded	编码器过载
+Average Time to Render Frame	渲染帧平均时间
+Frames Missed due to Rendering Lag	由于渲染延迟错过的帧
+Skipped Frames due to Encoding Lag	由于编码延迟跳过的帧
+Auto-Configuration Wizard	自动配置向导

@@ -45,3 +45,72 @@ Evaluate Formula	公式求值
 Formula Auditing	公式审核
 Subtotal	分类汇总
 External References	外部引用
+
+# 数据整理、工作表操作与分析命令
+# 参考：https://support.microsoft.com/excel
+Quick Analysis	快速分析
+Custom Sort	自定义排序
+Sort by Color	按颜色排序
+Advanced Filter	高级筛选
+Filter by Color	按颜色筛选
+Reapply Filter	重新应用筛选
+Clear Filter	清除筛选
+Unique Records Only	选择不重复的记录
+Excel Table	Excel 表格
+Format as Table	套用表格格式
+Table Design	表设计
+Total Row	汇总行
+Convert to Range	转换为区域
+Insert Slicer	插入切片器
+Insert Timeline	插入日程表
+Report Filter	报表筛选器
+Value Field Settings	值字段设置
+Show Values As	值显示方式
+Summarize Values By	值汇总依据
+Recommended PivotTables	推荐的数据透视表
+Refresh All	全部刷新
+Transpose	转置
+Paste Special	选择性粘贴
+AutoFit Column Width	自动调整列宽
+AutoFit Row Height	自动调整行高
+Insert Sheet Rows	插入工作表行
+Delete Sheet Columns	删除工作表列
+Hide Sheet	隐藏工作表
+Move or Copy Sheet	移动或复制工作表
+Group Worksheets	组合工作表
+Protect Workbook	保护工作簿
+Allow Edit Ranges	允许编辑区域
+Show Formulas	显示公式
+Calculate Now	开始计算
+Calculate Sheet	计算工作表
+Calculation Options	计算选项
+Error Checking	错误检查
+Insert Function	插入函数
+Function Arguments	函数参数
+Lookup Value	查阅值
+Lookup Array	查阅数组
+Return Array	返回数组
+Solver Add-in	规划求解加载项
+Analysis ToolPak	分析工具库
+Forecast Sheet	预测工作表
+Trendline	趋势线
+Error Bars	误差线
+Sparklines	迷你图
+Data Bars	数据条
+Color Scales	色阶
+Icon Sets	图标集
+Highlight Cells Rules	突出显示单元格规则
+Manage Rules	管理规则
+Input Message	输入信息
+Error Alert	出错警告
+Workbook Links	工作簿链接
+Queries & Connections	查询和连接
+From Text/CSV	从文本/CSV
+From Table/Range	从表格/区域
+Merge Queries	合并查询
+Append Queries	追加查询
+Close & Load	关闭并上载
+Page Setup	页面设置
+Print Titles	打印标题
+Set Print Area	设置打印区域
+Repeat Rows at Top	顶端标题行

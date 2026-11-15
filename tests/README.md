@@ -13,6 +13,9 @@
 | `tutorial-columns.png` | 左栏目录和右栏标题、正文各自选中，右侧译文不混入目录 |
 | `achievements.png` | 多张成就卡片的 Challenger 分词、罗马序号和相邻卡片隔离 |
 | `npc-name.png` | 亮背景中的 Lawrence 和青色头衔分别识别 |
+| `dark-text-ice-you.png`、`dark-text-ice-domovoy.png` | 浅色冰晶背景下，从不同鼠标位置查 `you`、`Domovoy` 及相邻单词 |
+| `domovoy-foreman.png` | 对话行末的 `foreman` 可独立选中 |
+| `dialogue-survive.png` | 从对话里查 `survive`，显示通用离线释义 |
 | `world-map.png` | 从地名两端查词和翻译整段，覆盖被地图图标遮挡的地名及换行地名 |
 | `desktop-icon.png` | 从桌面快捷方式两行标签中识别完整的 Desktop |
 | `mixed-text.png` | 从紧贴汉字的文本中取出完整的 hatch-pet |

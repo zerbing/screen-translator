@@ -1,9 +1,17 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ScreenTranslator;
 
+internal enum OnlineEngine { Automatic, Google, MyMemory, Baidu, DeepSeek }
+
 internal sealed record AppSettings(bool SupportedAppsOnly = false, bool DefaultParagraph = false,
-    bool Paused = false, bool UseDeepSeek = false);
+    bool Paused = false, bool UseDeepSeek = false, OnlineEngine? Engine = null)
+{
+    [JsonIgnore]
+    public OnlineEngine SelectedEngine => Engine is { } engine && Enum.IsDefined(engine) ? engine
+        : UseDeepSeek ? OnlineEngine.DeepSeek : OnlineEngine.Automatic;
+}
 
 internal sealed class AppSettingsStore(string path)
 {

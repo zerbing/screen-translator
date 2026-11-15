@@ -5,3 +5,11 @@
 __pycache__/
 .env
 .env.*
+
+# Local preferences, credentials, and cached translations
+credentials.dat
+credentials.dat.tmp
+settings.json
+settings.json.tmp
+translation-cache.json
+translation-cache.json.tmp

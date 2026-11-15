@@ -29,3 +29,68 @@ One-to-many	一对多
 Conditional Formatting	条件格式
 Field Parameter	字段参数
 Calculation Group	计算组
+
+# Power Query、模型、度量值及可视化
+# 参考：https://learn.microsoft.com/zh-cn/power-bi/
+Data Source Settings	数据源设置
+Privacy Levels	隐私级别
+Transform Data	转换数据
+Data Preview	数据预览
+Column Quality	列质量
+Column Distribution	列分布
+Column Profile	列配置文件
+Promote Headers	提升标题
+Use First Row as Headers	将第一行用作标题
+Change Type	更改类型
+Replace Values	替换值
+Remove Errors	删除错误
+Keep Rows	保留行
+Remove Rows	删除行
+Split Column	拆分列
+Merge Columns	合并列
+Group By	分组依据
+Unpivot Columns	逆透视列
+Unpivot Other Columns	逆透视其他列
+Pivot Column	透视列
+Merge Queries	合并查询
+Append Queries	追加查询
+Combine Files	合并文件
+Close & Apply	关闭并应用
+Advanced Editor	高级编辑器
+Enable Load	启用加载
+Import Mode	导入模式
+Dual Mode	双重模式
+Composite Model	复合模型
+Manage Relationships	管理关系
+Cardinality	基数
+Active Relationship	活动关系
+Inactive Relationship	非活动关系
+Bidirectional Filtering	双向筛选
+Calculated Measure	计算度量值
+Implicit Measure	隐式度量值
+Quick Measure	快速度量值
+New Measure	新建度量值
+Time Intelligence	时间智能
+Calendar Table	日历表
+Mark as Date Table	标记为日期表
+Date Hierarchy	日期层次结构
+Manage Roles	管理角色
+View as Role	以角色身份查看
+Object-Level Security	对象级别安全性
+Visual Calculation	视觉计算
+Report Page Tooltip	报表页工具提示
+Dashboard Tile	仪表板磁贴
+Sync Slicers	同步切片器
+Edit Interactions	编辑交互
+Visual-level Filter	视觉对象级筛选器
+Page-level Filter	页面级筛选器
+Report-level Filter	报表级筛选器
+Cross-highlighting	交叉突出显示
+Performance Analyzer	性能分析器
+Scheduled Refresh	计划刷新
+On-premises Data Gateway	本地数据网关
+Deployment Pipeline	部署管道
+Paginated Report	分页报表
+Waterfall Chart	瀑布图
+Matrix Visual	矩阵视觉对象
+Small Multiples	小倍图

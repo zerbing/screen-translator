@@ -7,7 +7,7 @@ internal sealed class DemoWindow : Form
     private static readonly Color Mint = Color.FromArgb(144, 219, 202);
     private static readonly Color Card = Color.FromArgb(31, 43, 58);
 
-    public DemoWindow()
+    public DemoWindow(Action openTranslationSettings)
     {
         Text = "屏幕翻译";
         StartPosition = FormStartPosition.CenterScreen;
@@ -36,6 +36,17 @@ internal sealed class DemoWindow : Form
             21, 85, 13, Ink, family: "Segoe UI");
 
         AddLabel(this, "关闭窗口后，应用仍在任务栏通知区域运行。", 34, 309, 9.5f, Muted);
+        var settings = new Button
+        {
+            Text = "翻译设置…",
+            ForeColor = Ink,
+            BackColor = Card,
+            FlatStyle = FlatStyle.Flat,
+            Location = new Point((int)(530 * scale), (int)(300 * scale)),
+            Size = new Size((int)(118 * scale), (int)(32 * scale))
+        };
+        settings.Click += (_, _) => openTranslationSettings();
+        Controls.Add(settings);
     }
 
     private void AddLabel(Control parent, string text, int x, int y, float size, Color color,

@@ -39,3 +39,71 @@ Camera Raw Filter	Camera Raw 滤镜
 Artboard	画板
 Vanishing Point	消失点
 Feather	羽化
+
+# 画布、选区、图层与修图操作
+# 参考：https://helpx.adobe.com/cn/photoshop/user-guide.html
+Image Size	图像大小
+Canvas Size	画布大小
+Free Transform	自由变换
+Transform Selection	变换选区
+Perspective Warp	透视变形
+Puppet Warp	操控变形
+Perspective Crop Tool	透视裁剪工具
+Rectangular Marquee Tool	矩形选框工具
+Elliptical Marquee Tool	椭圆选框工具
+Polygonal Lasso Tool	多边形套索工具
+Magnetic Lasso Tool	磁性套索工具
+Object Selection Tool	对象选择工具
+Select Subject	选择主体
+Select Sky	选择天空
+Color Range	色彩范围
+Refine Edge Brush Tool	调整边缘画笔工具
+Anti-alias	消除锯齿
+Select Inverse	反向选择
+Load Selection	载入选区
+Save Selection	存储选区
+Contract Selection	收缩选区
+Expand Selection	扩展选区
+Brush Presets	画笔预设
+Mixer Brush Tool	混合器画笔工具
+History Brush Tool	历史记录画笔工具
+Remove Tool	移除工具
+Patch Tool	修补工具
+Content-Aware Move Tool	内容感知移动工具
+Red Eye Tool	红眼工具
+Gradient Tool	渐变工具
+Paint Bucket Tool	油漆桶工具
+Eyedropper Tool	吸管工具
+Color Sampler Tool	颜色取样器工具
+Blur Tool	模糊工具
+Sharpen Tool	锐化工具
+Smudge Tool	涂抹工具
+Sponge Tool	海绵工具
+Layer Via Copy	通过拷贝的图层
+Layer Via Cut	通过剪切的图层
+Merge Visible	合并可见图层
+Flatten Image	拼合图像
+Convert to Smart Object	转换为智能对象
+Rasterize Layer	栅格化图层
+Replace Contents	替换内容
+Alpha Channel	Alpha 通道
+Channel Mixer	通道混合器
+Photo Filter	照片滤镜
+Shadows/Highlights	阴影/高光
+Black & White	黑白	label
+Color Lookup	颜色查找
+Minimum Filter	最小值滤镜
+Maximum Filter	最大值滤镜
+Lens Correction	镜头校正
+Lens Blur	镜头模糊
+Smart Sharpen	智能锐化
+Reduce Noise	减少杂色
+Filter Gallery	滤镜库
+Neural Filters	神经滤镜
+Generative Expand	生成式扩展
+Sky Replacement	天空替换
+Save a Copy	存储副本
+Quick Export as PNG	快速导出为 PNG
+Export As	导出为
+Convert to Profile	转换为配置文件
+Assign Profile	指定配置文件

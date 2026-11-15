@@ -35,3 +35,122 @@ Xianzhou Luofu	仙舟「罗浮」
 Amphoreus	翁法罗斯
 Eidolon	星魂
 Toughness	韧性
+
+# 养成、抽卡与战斗
+# 参考：https://hsr.hoyoverse.com/
+Character Ascension	角色晋阶
+Light Cone Ascension	光锥晋阶
+Superimposition	叠影
+Traces	行迹	label
+Technique Points	秘技点
+Skill Points	战技点
+Talent	天赋	label
+Technique	秘技	label
+Ultimate	终结技	label
+Action Value	行动值
+Action Order	行动序列
+Action Advance	行动提前
+Action Delay	行动延后
+Energy Regeneration Rate	能量恢复效率
+CRIT Rate	暴击率
+CRIT DMG	暴击伤害
+DMG Boost	伤害提高
+DMG Reduction	伤害降低
+All-Type RES PEN	全属性抗性穿透
+DEF Reduction	防御力降低
+DMG Taken	受到的伤害
+Additional DMG	附加伤害
+True DMG	真实伤害
+Damage over Time	持续伤害
+Wind Shear	风化
+Imprisonment	禁锢	label
+Entanglement	纠缠	label
+Crowd Control	控制效果
+Toughness Reduction	削韧
+Weakness Type	弱点属性
+Weakness Break Efficiency	弱点击破效率
+Memosprite	忆灵
+Memosprite Skill	忆灵技
+The Hunt	巡猎
+The Erudition	智识
+The Harmony	同谐
+The Nihility	虚无
+The Preservation	存护
+The Abundance	丰饶
+The Remembrance	记忆
+The Destruction	毁灭
+Relic	遗器	label
+Relic Set	遗器套装
+Relic Remains	遗器残骸
+Self-Modeling Resin	自塑尘脂
+Wishful Resin	遂愿尘脂
+Lost Gold Fragment	遗失碎金
+Lost Crystal	遗失晶块
+Traveler's Guide	漫游指南
+Adventure Log	冒险记录
+Travel Encounters	旅情见闻
+Fuel	燃料	label
+Immersifier	沉浸器
+Undying Starlight	未熄的星芒
+Undying Embers	未熄的余烬
+Warp	跃迁	label
+Departure Warp	始发跃迁
+Stellar Warp	群星跃迁
+Character Event Warp	角色活动跃迁
+Light Cone Event Warp	光锥活动跃迁
+Character Trial	角色试用
+Nameless Honor	无名勋礼
+Nameless Gift	无名客的赠礼
+Nameless Glory	无名客的荣勋
+Daily Training	每日实训
+Interastral Peace Guide	星际和平指南
+Operation Briefing	行动摘要
+Survival Index	生存索引
+Planar Fissure	位面分裂
+Planar Ornament Extraction	位面饰品提取
+Ornament Extraction	饰品提取
+Trailblaze Mission	开拓任务
+Adventure Mission	冒险任务
+Companion Mission	同行任务
+Trailblaze Continuance	开拓续闻
+Space Anchor	界域定锚
+Cosmic Fragment	宇宙碎片
+Curio	奇物	label
+Equilibrium Level	均衡等级
+Imaginary Tree	虚数之树
+Stellaron	星核
+Stellaron Hunters	星核猎手
+Interastral Peace Corporation	星际和平公司
+Genius Society	天才俱乐部
+Acheron	黄泉
+Black Swan	黑天鹅
+Dan Heng	丹恒
+Imbibitor Lunae	饮月
+Jing Yuan	景元
+Jingliu	镜流
+Kafka	卡芙卡
+March 7th	三月七
+Ruan Mei	阮·梅
+Silver Wolf	银狼
+Fu Xuan	符玄
+Luocha	罗刹
+Huohuo	藿藿
+Firefly	流萤	label
+Aventurine	砂金	label
+Sparkle	花火	label
+Boothill	波提欧
+Topaz & Numby	托帕&账账
+Dr. Ratio	真理医生
+Feixiao	飞霄
+Lingsha	灵砂
+Sunday	星期日	label
+Fugue	忘归人	label
+The Herta	大黑塔
+Aglaea	阿格莱雅
+Castorice	遐蝶
+Anaxa	那刻夏
+Hyacine	风堇
+Phainon	白厄
+Cipher	赛飞儿	label
+Tribbie	缇宝
+Mydei	万敌

@@ -35,3 +35,70 @@ Word Wrap	自动换行
 Sticky Scroll	粘滞滚动
 Command Line Interface	命令行界面
 Inline Suggestions	内联建议
+
+# 工作台、代码导航、调试和 Git 操作
+# 参考：https://code.visualstudio.com/docs
+Open Editors	打开的编辑器
+Quick Open	快速打开
+Go to File	转到文件
+Go to Line/Column	转到行/列
+Go to Symbol in Editor	转到编辑器中的符号
+Go to Symbol in Workspace	转到工作区中的符号
+Go to Type Definition	转到类型定义
+Go to Implementations	转到实现
+Peek References	速览引用
+Toggle Breadcrumbs	切换痕迹导航
+Split Editor	拆分编辑器
+Editor Group	编辑器组
+Pin Editor	固定编辑器
+Reopen Closed Editor	重新打开已关闭的编辑器
+Reveal in File Explorer	在文件资源管理器中显示
+Open Folder	打开文件夹
+Add Folder to Workspace	将文件夹添加到工作区
+Save Workspace As	将工作区另存为
+Toggle Panel	切换面板
+Problems Panel	问题面板
+Output Panel	输出面板
+Debug Console	调试控制台
+Run Without Debugging	以非调试模式运行
+Start Debugging	启动调试
+Launch Configuration	启动配置
+Conditional Breakpoint	条件断点
+Inline Breakpoint	内联断点
+Function Breakpoint	函数断点
+Logpoint	日志点
+Debug Adapter	调试适配器
+Run Task	运行任务
+Configure Tasks	配置任务
+Run Build Task	运行生成任务
+Split Terminal	拆分终端
+Terminal Profile	终端配置文件
+Open User Settings (JSON)	打开用户设置 (JSON)
+Open Workspace Settings (JSON)	打开工作区设置 (JSON)
+Open Keyboard Shortcuts (JSON)	打开键盘快捷方式 (JSON)
+Format on Save	保存时格式化
+Default Formatter	默认格式化程序
+Change Language Mode	更改语言模式
+Change End of Line Sequence	更改行尾序列
+File Associations	文件关联
+Organize Imports	整理导入
+Extract Method	提取方法
+Extract Variable	提取变量
+Add Selection to Next Find Match	将选择添加到下一个查找匹配项
+Toggle Line Comment	切换行注释
+Toggle Block Comment	切换块注释
+Quick Diff	快速差异比较
+Stage Changes	暂存更改
+Unstage Changes	取消暂存更改
+Discard Changes	放弃更改
+Commit Staged	提交暂存的更改
+Publish Branch	发布分支
+Sync Changes	同步更改
+Incoming Changes	传入的更改
+Outgoing Changes	传出的更改
+Merge Editor	合并编辑器
+Resolve in Merge Editor	在合并编辑器中解决
+Extension Bisect	扩展二分查找
+Install from VSIX	从 VSIX 安装
+Remote Explorer	远程资源管理器
+Remote Tunnel	远程隧道

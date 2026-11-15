@@ -31,3 +31,67 @@ Drop Cap	首字下沉
 Document Inspector	文档检查器
 Quick Parts	文档部件
 Different First Page	首页不同
+
+# 排版、引用、审阅与邮件合并
+# 参考：https://support.microsoft.com/word
+Styles Pane	样式窗格
+Apply Styles	应用样式
+Manage Styles	管理样式
+Style Inspector	样式检查器
+Style Set	样式集
+Outline Level	大纲级别
+Multilevel List	多级列表
+Define New List Style	定义新的列表样式
+Restart Numbering	重新开始编号
+Continue Numbering	继续编号
+Adjust List Indents	调整列表缩进
+Show/Hide Paragraph Marks	显示/隐藏段落标记
+Nonbreaking Space	不间断空格
+Nonbreaking Hyphen	不间断连字符
+Soft Hyphen	可选连字符
+Manual Line Break	手动换行符
+Column Break	分栏符
+Keep Lines Together	段中不分页
+Page Break Before	段前分页
+Mirror Margins	对称页边距
+Gutter Position	装订线位置
+Link to Previous	链接到前一节
+Different Odd & Even Pages	奇偶页不同
+Repeat Header Rows	重复标题行
+AutoFit Contents	根据内容自动调整表格
+Distribute Rows	分布行
+Distribute Columns	分布列
+Split Cells	拆分单元格
+Split Table	拆分表格
+Convert Text to Table	将文本转换成表格
+Text Wrapping	文字环绕
+In Line with Text	嵌入型
+Behind Text	衬于文字下方
+In Front of Text	浮于文字上方
+Insert Caption	插入题注
+Insert Citation	插入引文
+Manage Sources	管理源
+Update Table	更新目录
+Mark Entry	标记索引项
+Insert Index	插入索引
+Field Codes	域代码
+Toggle Field Codes	切换域代码
+Reviewing Pane	审阅窗格
+Show Markup	显示标记
+Simple Markup	简单标记
+All Markup	所有标记
+No Markup	无标记
+Accept All Changes	接受所有修订
+Reject All Changes	拒绝所有修订
+Start Mail Merge	开始邮件合并
+Select Recipients	选择收件人
+Edit Recipient List	编辑收件人列表
+Address Block	地址块
+Greeting Line	问候语
+Merge Field	合并域
+Insert Merge Field	插入合并域
+Preview Results	预览结果
+Finish & Merge	完成并合并
+Building Blocks Organizer	构建基块管理器
+Accessibility Checker	辅助功能检查器
+Document Properties	文档属性

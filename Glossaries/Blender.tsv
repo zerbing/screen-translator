@@ -36,3 +36,70 @@ Bevel Modifier	倒角修改器
 Mirror Modifier	镜像修改器
 Decimate Modifier	精简修改器
 Outliner	大纲视图
+
+# 建模、节点、动画与渲染
+# 参考：https://docs.blender.org/manual/zh-hans/latest/
+Transform Orientation	变换坐标系
+Pivot Point	轴心点
+Median Point	中点
+Individual Origins	各自的原点
+Active Element	活动元素
+Origin to Geometry	原点到几何体
+Geometry to Origin	几何体到原点
+Apply Scale	应用缩放
+Apply All Transforms	应用全部变换
+Clear Parent	清除父级
+Shade Flat	平直着色
+Shade Auto Smooth	自动平滑着色
+Merge by Distance	按距离合并
+Recalculate Outside	重新计算外侧
+Flip Normals	翻转法线
+Bridge Edge Loops	桥接循环边
+Select Edge Loop	选择循环边
+Edge Crease	边折痕
+Limited Dissolve	有限融并
+Dissolve Edges	融并边
+Grid Fill	栅格填充
+Knife Tool	切割工具
+Loop Slide	循环滑移
+Vertex Slide	顶点滑移
+Solidify Modifier	实体化修改器
+Boolean Modifier	布尔修改器
+Shrinkwrap Modifier	缩裹修改器
+Weighted Normal Modifier	加权法线修改器
+Armature Modifier	骨架修改器
+Lattice Modifier	晶格修改器
+Displace Modifier	置换修改器
+Simple Deform Modifier	简易形变修改器
+Triangulate Modifier	三角化修改器
+Remesh Modifier	重构网格修改器
+Pack Islands	拼排孤岛
+Average Islands Scale	平均孤岛比例
+Smart UV Project	智能 UV 投射
+Project from View	从视角投射
+Principled BSDF	原理化 BSDF
+Material Output	材质输出
+Image Texture	图像纹理
+Texture Coordinate	纹理坐标
+Color Ramp	颜色渐变
+Normal Map	法线贴图
+Bump Node	凹凸节点
+Group Input	组输入
+Group Output	组输出
+Distribute Points on Faces	在面上分布点
+Instance on Points	实例化于点上
+Realize Instances	实例实体化
+Join Geometry	合并几何
+Set Position	设置位置
+Simulation Zone	模拟区
+Auto Keying	自动插帧
+Interpolation Mode	插值模式
+Action Editor	动作编辑器
+Nonlinear Animation	非线性动画
+Render Engine	渲染引擎
+Render Region	渲染区域
+Film Transparent	胶片透明
+Color Management	色彩管理
+View Transform	视图变换
+Light Paths	光程
+Denoising	降噪

@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace ScreenTranslator;
@@ -16,6 +17,7 @@ internal sealed partial class TermGlossary
 
     private readonly Dictionary<string, List<Term>> termsByFirstWord = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> labels = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> paragraphLabels = new(StringComparer.OrdinalIgnoreCase);
     public string Version { get; }
     public string Id { get; }
     public string ApplicationName { get; }
@@ -50,6 +52,11 @@ internal sealed partial class TermGlossary
             if (row.Length == 0 || row.StartsWith('#'))
                 continue;
             var fields = row.Split('\t');
+            if (fields.Length == 3 && fields[2] == "paragraph")
+            {
+                paragraphLabels.TryAdd(fields[0], fields[1]);
+                continue;
+            }
             if (fields.Length == 3 && fields[2] is "label" or "title")
             {
                 labels.TryAdd(fields[0], fields[1]);
@@ -81,16 +88,18 @@ internal sealed partial class TermGlossary
     [GeneratedRegex(@"^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$")]
     private static partial Regex EdgePunctuation();
 
-    public string? FindLabel(string text)
+    private static string? FindLabel(Dictionary<string, string> entries, string text)
     {
         text = Normalize(text.Trim());
-        return labels.GetValueOrDefault(text) ?? labels.GetValueOrDefault(EdgePunctuation().Replace(text, ""));
+        return entries.GetValueOrDefault(text) ?? entries.GetValueOrDefault(EdgePunctuation().Replace(text, ""));
     }
+
+    public string? FindParagraphLabel(string text) => FindLabel(paragraphLabels, text) ?? FindLabel(labels, text);
 
     public Selection? At(ScreenLine line, int index)
     {
         var text = Normalize(line.Text);
-        if (FindLabel(text) is { } translation)
+        if (FindLabel(labels, text) is { } translation)
             return new Selection(text, line.Text, line.Bounds, translation, Source);
 
         var start = 0;
@@ -176,7 +185,11 @@ internal sealed partial class TermGlossary
     public static string Normalize(string text) => text.Replace('’', '\'').Replace('‘', '\'');
 }
 
-internal sealed record TranslationResult(string Text, string? Source = null);
+internal sealed record TranslationResult(string Text, string? Source = null,
+    [property: JsonIgnore] bool TermsMayBeMissing = false);
+
+internal sealed class NoTranslationException() : IOException("No Chinese translation returned.");
+internal sealed class TranslationAuthenticationException() : IOException("The translation API rejected the credentials.");
 
 internal sealed partial class Translator : IDisposable
 {
@@ -201,6 +214,7 @@ internal sealed partial class Translator : IDisposable
         PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
     }) { Timeout = Timeout.InfiniteTimeSpan, DefaultRequestVersion = HttpVersion.Version11 };
     private readonly TranslationCache cache;
+    private readonly OfflineDictionary dictionary = new();
     private long googleAvailableAfter;
 
     public Translator(string? cachePath = null)
@@ -212,12 +226,15 @@ internal sealed partial class Translator : IDisposable
     }
 
     public async Task<TranslationResult> TranslateAsync(Selection selection, bool paragraph, TermGlossary? glossary,
-        string? apiKey, CancellationToken token)
+        string? apiKey, CancellationToken token, BaiduCredentials? baidu = null, OnlineEngine engine = OnlineEngine.Automatic)
     {
         if (selection.Term is { } term)
             return new TranslationResult(term, selection.TermSource);
-        if (paragraph && glossary is not null && glossary.FindLabel(selection.Text) is { } label)
+        if (paragraph && glossary is not null && glossary.FindParagraphLabel(selection.Text) is { } label)
             return new TranslationResult(label, glossary.Source);
+
+        if (!paragraph && dictionary.Find(selection.Text) is { } definition)
+            return new TranslationResult(definition, OfflineDictionary.Source);
 
         var useAi = !string.IsNullOrWhiteSpace(apiKey);
         var glossaryText = NormalizeForLookup(paragraph ? selection.Text : selection.Context);
@@ -225,30 +242,27 @@ internal sealed partial class Translator : IDisposable
         if (paragraph && glossary is not null && hits is [var exact]
             && exact.Index == 0 && exact.Length == glossaryText.Length)
             return new TranslationResult(exact.Chinese, glossary.Source);
-        var key = CacheKey(selection, paragraph, glossary, useAi, hits);
-        if (await cache.GetAsync(key, token) is { } cached)
-            return cached;
+        var online = useAi ? OnlineEngine.Automatic : baidu is not null ? OnlineEngine.Baidu : engine;
+        var key = CacheKey(selection, paragraph, glossary, useAi, hits, online);
+        if (await cache.GetAsync(key, token) is { } cached
+            && (cached.Source != "MyMemory" || !DictionaryFragment().IsMatch(cached.Text)))
+            return cached.Source is null ? cached with { Source = "Google" } : cached;
 
         TranslationResult result;
-        if (useAi)
+        try
         {
-            try
-            {
-                result = new TranslationResult(await DeepSeekAsync(selection, paragraph, glossary, hits, apiKey!, token), "DeepSeek");
-            }
-            catch (Exception error) when (!token.IsCancellationRequested && IsServiceError(error))
-            {
-                result = await TranslateAsync(selection, paragraph, glossary, null, token);
-                return result with { Source = $"DeepSeek 暂不可用 · {result.Source ?? "Google"}" };
-            }
+            result = useAi
+                ? new TranslationResult(await DeepSeekAsync(selection, paragraph, glossary, hits, apiKey!, token), "DeepSeek")
+                : await TranslateOnlineAsync(selection, paragraph, glossaryText, hits, baidu, online, token);
         }
-        else
+        catch (Exception error) when (engine == OnlineEngine.Automatic && (useAi || baidu is not null)
+            && !token.IsCancellationRequested && IsServiceError(error))
         {
-            result = await GoogleAsync(selection, paragraph, glossaryText, hits, token);
+            return await TranslateAsync(selection, paragraph, glossary, null, token);
         }
 
         token.ThrowIfCancellationRequested();
-        if (result.Source != "术语可能有遗漏")
+        if (!result.TermsMayBeMissing)
             await cache.StoreAsync(key, result);
         return result;
     }
@@ -258,7 +272,8 @@ internal sealed partial class Translator : IDisposable
 
     private static string NormalizeForLookup(string text) => Whitespace().Replace(TermGlossary.Normalize(text).Trim(), " ");
 
-    internal static string CacheKey(Selection selection, bool paragraph, TermGlossary? glossary, bool useAi, TermGlossary.Hit[] hits)
+    internal static string CacheKey(Selection selection, bool paragraph, TermGlossary? glossary, bool useAi,
+        TermGlossary.Hit[] hits, OnlineEngine engine = OnlineEngine.Automatic)
     {
         var text = NormalizeForLookup(selection.Text);
         if (!paragraph && !useAi)
@@ -276,11 +291,12 @@ internal sealed partial class Translator : IDisposable
             version = 1, text, context, paragraph, genshin, useAi,
             glossary = version
         });
-        return Convert.ToHexString(SHA256.HashData(data));
+        var key = Convert.ToHexString(SHA256.HashData(data));
+        return engine == OnlineEngine.Automatic ? key : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{engine}:{key}")));
     }
 
-    private async Task<TranslationResult> GoogleAsync(Selection selection, bool paragraph, string glossaryText,
-        TermGlossary.Hit[] hits, CancellationToken token)
+    private async Task<TranslationResult> TranslateOnlineAsync(Selection selection, bool paragraph, string glossaryText,
+        TermGlossary.Hit[] hits, BaiduCredentials? baidu, OnlineEngine engine, CancellationToken token)
     {
         var text = selection.Text;
         var replacements = new Dictionary<string, string>();
@@ -297,15 +313,15 @@ internal sealed partial class Translator : IDisposable
             });
         }
 
-        var (translated, meanings, provider) = await RequestAsync(text, !paragraph, token);
+        var (translated, meanings, provider) = await RequestAsync(text, !paragraph, baidu, engine, token);
         if (replacements.Count != 0)
             translated = FixPlaceholderSpacing().Replace(translated, "⟦$1⟧");
         if (replacements.Keys.Any(placeholder => translated.Split(placeholder, StringSplitOptions.None).Length != 2))
         {
             var withChineseTerms = TermGlossary.Replace(glossaryText, hits, hit => hit.Chinese);
-            (translated, _, provider) = await RequestAsync(withChineseTerms, false, token);
+            (translated, _, provider) = await RequestAsync(withChineseTerms, false, baidu, engine, token);
             if (replacements.Values.Any(term => !translated.Contains(term, StringComparison.Ordinal)))
-                return new TranslationResult(translated, "术语可能有遗漏");
+                return new TranslationResult(translated, provider, TermsMayBeMissing: true);
         }
         else
         {
@@ -319,39 +335,47 @@ internal sealed partial class Translator : IDisposable
     [GeneratedRegex(@"⟦\s*(\d+)\s*⟧")]
     private static partial Regex FixPlaceholderSpacing();
 
-    private async Task<(string Translation, string[] Meanings, string? Source)> RequestAsync(string text, bool dictionary, CancellationToken token)
+    private async Task<(string Translation, string[] Meanings, string Source)> RequestAsync(string text, bool dictionary,
+        BaiduCredentials? baidu, OnlineEngine engine, CancellationToken token)
     {
+        if (baidu is not null)
+            return (await BaiduAsync(text, baidu, token), [], "百度翻译");
+
         var query = $"/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t{(dictionary ? "&dt=bd" : "")}&q={Uri.EscapeDataString(text)}";
-        if (Environment.TickCount64 >= googleAvailableAfter)
+        if (engine != OnlineEngine.MyMemory && Environment.TickCount64 >= googleAvailableAfter)
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
             timeout.CancelAfter(TimeSpan.FromSeconds(3));
             try
             {
                 var (translation, meanings) = await ReadGoogleAsync("https://translate.googleapis.com" + query, dictionary, timeout.Token);
-                return (translation, meanings, null);
+                return (translation, meanings, "Google");
             }
             catch (Exception error) when (!token.IsCancellationRequested && IsServiceError(error))
             {
                 googleAvailableAfter = Environment.TickCount64 + (error is HttpRequestException { StatusCode: HttpStatusCode.TooManyRequests }
                     ? 60_000 : 25_000);
+                if (engine == OnlineEngine.Google)
+                    throw;
             }
         }
 
+        if (engine == OnlineEngine.Google)
+            throw new IOException("Google translation is cooling down after a service error.");
+
         var translations = new List<string>();
-        foreach (var segment in SplitForMyMemory(text))
+        foreach (var segment in SplitTranslationText(text, 500))
         {
             var uri = new Uri($"https://api.mymemory.translated.net/get?langpair=en%7Czh-CN&q={Uri.EscapeDataString(segment)}");
             var timeout = TimeSpan.FromSeconds(segment.Length > 250 ? 7 : 4);
             translations.Add(await PreferDirectAsync(uri, timeout,
-                (client, cancellation) => ReadMyMemoryAsync(client, uri, cancellation), token));
+                (client, cancellation) => ReadMyMemoryAsync(client, uri, segment, cancellation), token));
         }
         return (string.Join(' ', translations), [], "MyMemory");
     }
 
-    private static IEnumerable<string> SplitForMyMemory(string text)
+    internal static IEnumerable<string> SplitTranslationText(string text, int byteLimit)
     {
-        const int byteLimit = 500;
         while (Encoding.UTF8.GetByteCount(text) > byteLimit)
         {
             var length = 0;
@@ -379,17 +403,48 @@ internal sealed partial class Translator : IDisposable
             yield return text;
     }
 
-    private static async Task<string> ReadMyMemoryAsync(HttpClient client, Uri uri, CancellationToken token)
+    private static async Task<string> ReadMyMemoryAsync(HttpClient client, Uri uri, string text, CancellationToken token)
     {
         using var stream = await client.GetStreamAsync(uri, token);
         using var body = await JsonDocument.ParseAsync(stream, cancellationToken: token);
-        var root = body.RootElement;
-        var textResult = root.GetProperty("responseData").GetProperty("translatedText").GetString()?.Trim();
-        if (root.GetProperty("responseStatus").ToString() != "200" || string.IsNullOrWhiteSpace(textResult)
-            || !textResult.Any(character => character is >= '\u3400' and <= '\u9FFF'))
-            throw new InvalidDataException("No MyMemory translation.");
-        return WebUtility.HtmlDecode(textResult);
+        return ParseMyMemory(body.RootElement, text);
     }
+
+    internal static string ParseMyMemory(JsonElement root, string text)
+    {
+        if (root.GetProperty("responseStatus").ToString() != "200")
+            throw new InvalidDataException("MyMemory request was unsuccessful.");
+
+        if (ChineseText(root.GetProperty("responseData").GetProperty("translatedText")) is { } translation)
+            return translation;
+
+        var requested = NormalizeForLookup(text);
+        if (root.TryGetProperty("matches", out var matches) && matches.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var match in matches.EnumerateArray())
+            {
+                if (match.ValueKind != JsonValueKind.Object
+                    || !match.TryGetProperty("target", out var target) || target.ValueKind != JsonValueKind.String
+                    || !string.Equals(target.GetString(), "zh-CN", StringComparison.OrdinalIgnoreCase)
+                    || !match.TryGetProperty("segment", out var segment) || segment.ValueKind != JsonValueKind.String
+                    || !requested.Equals(NormalizeForLookup(WebUtility.HtmlDecode(segment.GetString()!)), StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (match.TryGetProperty("translation", out var candidate) && ChineseText(candidate) is { } recovered)
+                    return recovered;
+            }
+        }
+        throw new NoTranslationException();
+
+        static string? ChineseText(JsonElement value)
+        {
+            var decoded = value.ValueKind == JsonValueKind.String ? WebUtility.HtmlDecode(value.GetString())?.Trim() : null;
+            return decoded is not null && decoded.Any(character => character is >= '\u3400' and <= '\u9FFF')
+                && !DictionaryFragment().IsMatch(decoded) ? decoded : null;
+        }
+    }
+
+    [GeneratedRegex(@"^[\u3400-\u9FFF]+\s+[\u3400-\u9FFF]+\s+\[(?:[a-züv:]+[1-5]\s*)+\]$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex DictionaryFragment();
 
     private async Task<T> PreferDirectAsync<T>(Uri uri, TimeSpan delay, Func<HttpClient, CancellationToken, Task<T>> request,
         CancellationToken token, bool isPaidRequest = false)
@@ -401,6 +456,7 @@ internal sealed partial class Translator : IDisposable
             return await request(directHttp, directTimeout.Token);
         }
         catch (Exception error) when (!token.IsCancellationRequested && IsServiceError(error)
+            && error is not NoTranslationException
             && error is not HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.PaymentRequired or HttpStatusCode.TooManyRequests }
             && (!isPaidRequest || error is HttpRequestException { HttpRequestError: HttpRequestError.NameResolutionError
                 or HttpRequestError.ConnectionError or HttpRequestError.SecureConnectionError })
@@ -488,6 +544,7 @@ internal sealed partial class Translator : IDisposable
 
     public void Dispose()
     {
+        dictionary.Dispose();
         http.Dispose();
         directHttp.Dispose();
     }

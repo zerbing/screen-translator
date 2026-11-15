@@ -6,7 +6,7 @@
     <ApplicationIcon>ScreenTranslator.ico</ApplicationIcon>
     <AssemblyTitle>屏幕翻译</AssemblyTitle>
     <Product>屏幕翻译</Product>
-    <Version>1.0.2</Version>
+    <Version>1.0.8</Version>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -15,6 +15,8 @@
   <ItemGroup>
     <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
     <EmbeddedResource Include="Glossaries/*.tsv" LogicalName="ScreenTranslator.Glossaries.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Dictionaries/ECDICT.zip" LogicalName="ScreenTranslator.Dictionaries.ECDICT.zip" />
+    <EmbeddedResource Include="Dictionaries/ECDICT-LICENSE.txt" LogicalName="ScreenTranslator.Dictionaries.ECDICT-LICENSE.txt" />
     <Compile Remove="tests/**/*.cs" />
     <InternalsVisibleTo Include="ScreenTranslator.Regression" />
   </ItemGroup>

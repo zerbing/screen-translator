@@ -23,3 +23,101 @@ Thrash	皮蛋
 Wingman	包包
 Dizzy	丢丢
 Mosh Pit	嗨爆全场
+
+# 对局提示、武器装备、地图与特工
+# 参考：https://val.qq.com/
+Swiftplay	极速模式
+Spike Rush	爆能快攻
+Escalation	乱斗模式	label
+Custom Game	自定义游戏
+Practice Range	训练场
+Premier	巅峰赛	label
+Surrender Vote	投降投票
+Team Ace	团灭	label
+Thrifty	经济胜利	label
+Spike Carrier	爆能器携带者
+Spike Planted	爆能器已安装
+Spike Defused	爆能器已拆除
+Attacker Side	进攻方
+Defender Side	防守方
+Side Switch	攻防互换
+Match Point	赛点
+Sudden Death	突然死亡
+Half Buy	半起	label
+Full Buy	全起	label
+Eco Round	经济局
+Light Shields	轻型护甲
+Heavy Shields	重型护甲
+Regen Shield	再生护甲
+Classic	标配	label
+Shorty	短炮	label
+Frenzy	狂弑	label
+Ghost	鬼魅	label
+Sheriff	正义	label
+Stinger	蜂刺	label
+Spectre	骇灵	label
+Bucky	雄鹿	label
+Judge	判官	label
+Bulldog	獠犬	label
+Guardian	戍卫	label
+Phantom	幻影	label
+Vandal	狂徒	label
+Marshal	飞将	label
+Outlaw	莽侠	label
+Operator	冥驹	label
+Ares	战神	label
+Odin	奥丁	label
+Lotus	莲华古城	label
+Ascent	亚海悬城	label
+Bind	源工重镇	label
+Haven	隐世修所	label
+Split	霓虹町	label
+Icebox	森寒冬港	label
+Breeze	微风岛屿	label
+Fracture	裂变峡谷	label
+Pearl	深海明珠	label
+Sunset	日落之城	label
+Abyss	幽邃地窟	label
+Duelist	决斗者	label
+Controller	控场者	label
+Initiator	先锋	label
+Sentinel	哨卫	label
+Brimstone	炼狱	label
+Viper	蝰蛇	label
+Omen	幽影	label
+Killjoy	奇乐	label
+Cypher	零	label
+Sova	猎枭	label
+Sage	贤者	label
+Jett	捷风	label
+Phoenix	不死鸟	label
+Reyna	芮娜	label
+Raze	雷兹	label
+Breach	铁臂	label
+Skye	斯凯	label
+Yoru	夜露	label
+Astra	星礈	label
+KAY/O	K/O	label
+Chamber	尚勃勒	label
+Neon	霓虹	label
+Fade	黑梦	label
+Harbor	海神	label
+Gekko	盖可	label
+Deadlock	钢锁	label
+Iso	壹决	label
+Clove	暮蝶	label
+Vyse	维斯	label
+Tejo	钛狐	label
+Waylay	幻棱	label
+Weapon Recoil	武器后坐力
+Movement Error	移动误差
+Firing Error	射击误差
+Network Buffering	网络缓冲
+Packet Loss	丢包率
+Combat Report	战斗报告
+Damage Dealt	造成的伤害
+Damage Taken	受到的伤害
+Rank Rating	段位积分
+Leaderboard	排行榜	label
+Unrated Match	标准对局
+Competitive Match	竞技对局

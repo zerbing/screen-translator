@@ -29,3 +29,68 @@ Breakpoints	断点
 Step Into	逐语句
 Step Over	逐过程
 Step Out	跳出
+
+# IDE、调试、分析和项目操作
+# 参考：https://learn.microsoft.com/zh-cn/visualstudio/
+Class View	类视图
+Server Explorer	服务器资源管理器
+Team Explorer	团队资源管理器
+Output Window	输出窗口
+Properties Window	属性窗口
+Task List	任务列表
+Find Results	查找结果
+Pending Changes	挂起的更改
+Git Changes	Git 更改
+Git Repository	Git 存储库
+Manage Extensions	管理扩展
+New Project	新建项目
+Add Existing Item	添加现有项
+Set as Startup Project	设为启动项目
+Project Dependencies	项目依赖项
+Project Build Order	项目生成顺序
+Build Events	生成事件
+Target Framework	目标框架
+Platform Target	平台目标
+Restore NuGet Packages	还原 NuGet 程序包
+Manage NuGet Packages for Solution	管理解决方案的 NuGet 程序包
+Package Sources	程序包源
+Start Debugging	开始调试
+Start Without Debugging	开始执行(不调试)
+Restart Debugging	重新启动调试
+Stop Debugging	停止调试
+Break All	全部中断
+Run to Cursor	运行到光标处
+Set Next Statement	设置下一语句
+Show Next Statement	显示下一语句
+Enable Just My Code	启用“仅我的代码”
+Conditional Breakpoint	条件断点
+Data Breakpoint	数据断点
+Function Breakpoint	函数断点
+Breakpoint Conditions	断点条件
+Hit Count	命中次数
+Tracepoint	跟踪点
+Parallel Stacks	并行堆栈
+Parallel Watch	并行监视
+Threads Window	线程窗口
+Locals Window	局部变量窗口
+Autos Window	自动窗口
+Modules Window	模块窗口
+Memory Window	内存窗口
+Disassembly Window	反汇编窗口
+Reattach to Process	重新附加到进程
+Debug Managed Memory	调试托管内存
+Memory Usage	内存使用情况
+CPU Usage	CPU 使用率
+Take Snapshot	拍摄快照
+Run All Tests	运行所有测试
+Live Unit Testing	实时单元测试
+Code Cleanup	代码清理
+Code Analysis	代码分析
+Create Unit Tests	创建单元测试
+Find in Files	在文件中查找
+Go To All	转到所有
+Peek Definition	速览定义
+Encapsulate Field	封装字段
+Extract Interface	提取接口
+Move Type to Matching File	将类型移到匹配的文件
+Add Missing Usings	添加缺少的 using 指令

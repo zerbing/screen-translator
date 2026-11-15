@@ -1,6 +1,15 @@
 # 屏幕翻译
 
-Windows 屏幕英中翻译工具，适合玩游戏或使用英文软件时随手查词。鼠标停在英文上就能看中文释义，也可以翻译整段、朗读原文。
+Windows 屏幕英中翻译工具，适合玩游戏或使用英文软件时随手查词。
+
+起初是想玩英文版《原神》，顺带学英语。游戏里碰到不少生词，试了几款屏幕翻译工具都不太顺手，就自己做了一个。
+
+## 项目特点
+
+- **悬停翻译**。鼠标停在英文上就能看中文释义，无需复制文字或切换窗口，也可以快捷朗读原文。
+- **自动识别整段**。翻译整段时，程序根据鼠标位置找到对应段落，无需手动框选。适合阅读游戏对话、任务说明和软件帮助。
+- **适应复杂画面**。针对小字、花体字和低对比度文字优化识别，减少漏字和断词。
+- **按应用匹配术语**。在已适配的游戏或软件中自动加载专用词库，优先使用对应的译名。
 
 ## 开始使用
 
@@ -18,7 +27,12 @@ Windows 屏幕英中翻译工具，适合玩游戏或使用英文软件时随手
 
 程序按文字所在的应用加载词库，目前适配原神、Minecraft、Excel、VS Code、Blender 等游戏和软件。[查看完整列表](Glossaries/Applications.tsv) · [原神词库数据来源](https://genshin-dictionary.com/opendata)
 
-截图在本机处理，内置词条可以离线查。通用翻译需要联网，翻译服务只接收文本。可选 DeepSeek，设置 `SCREEN_TRANSLATOR_DEEPSEEK_API_KEY` 后重启程序，在托盘菜单中启用。[DeepSeek API 文档](https://api-docs.deepseek.com/quick_start/pricing/)
+截图在本机处理。查单词时优先使用应用专用词库和内置的 ECDICT 英汉词典，查不到再联网。通用段落翻译需要联网，翻译服务只接收文本。[ECDICT 数据](https://github.com/skywind3000/ECDICT/tree/39cfb9672c0906b63569e0453c2e6abfb9ab182a) · [MIT 许可](Dictionaries/ECDICT-LICENSE.txt)
+
+在主界面或托盘菜单打开「翻译设置」，可以选择自动、Google、MyMemory、百度翻译或 DeepSeek。默认的自动模式无需配置，按 Google、MyMemory 的顺序尝试。手动选择时，联网请求只使用所选引擎。填写的密钥会在本机加密保存。
+
+- **百度翻译**需要 App ID 和密钥。[开通通用翻译 API](https://fanyi-api.baidu.com/doc/13) · [计费与免费额度](https://fanyi-api.baidu.com/product/112)
+- **DeepSeek** 需要 API Key。[DeepSeek API 文档](https://api-docs.deepseek.com/quick_start/pricing/)
 
 ## 从源码构建
 

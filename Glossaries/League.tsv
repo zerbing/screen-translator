@@ -33,3 +33,620 @@ Barrier	屏障
 Cleanse	净化
 Last Hit	补刀
 Turret Plating	防御塔镀层
+
+# 对局、排位和界面
+# 参考：https://developer.riotgames.com/docs/lol
+Ranked Solo/Duo	排位赛（单排/双排）
+Ranked Flex	灵活排位
+Champion Select	英雄选择
+Champion Pool	英雄池
+Pick Order	选人顺序
+Ban Phase	禁用阶段
+Draft Pick	征召模式
+Blind Pick	自选模式
+Quickplay	快速模式	label
+Queue Dodge	秒退
+Summoner's Code	召唤师守则
+Placement Matches	定位赛
+League Points	胜点
+Blue Side	蓝色方
+Red Side	红色方
+First Pick	首选
+Teamfight	团战	label
+Side Lane	边路
+Bot Lane	下路
+Top Lane	上路
+Mid Lane	中路
+Jungle Camp	野怪营地
+Fog of War	战争迷雾
+Vision Score	视野得分
+Oracle Lens	神谕透镜
+Farsight Alteration	远见改造
+Adaptive Force	自适应之力
+Critical Strike Chance	暴击几率
+Critical Strike Damage	暴击伤害
+Bonus Attack Damage	额外攻击力
+Bonus Health	额外生命值
+On-hit Effect	攻击特效
+Heal and Shield Power	治疗和护盾强度
+Grievous Wounds	重伤
+Grounded	缚地	label
+Untargetable	不可被选取	label
+Knock-up	击飞	label
+First Blood	第一滴血
+Killing Spree	大杀特杀
+Double Kill	双杀
+Triple Kill	三杀
+Quadra Kill	四杀
+Penta Kill	五杀
+Legendary Kill	超神
+Ocean Drake	海洋亚龙
+Infernal Drake	炼狱亚龙
+Cloud Drake	云端亚龙
+Mountain Drake	山脉亚龙
+Hextech Drake	海克斯科技亚龙
+Chemtech Drake	炼金科技亚龙
+Dragon Soul	龙魂
+Rift Scuttler	峡谷迅捷蟹
+Hand of Baron	男爵之手
+Guardian Angel	守护天使
+
+# 英雄名称与称号（en_US、zh_CN，按英雄 ID 对照）
+# Riot Data Dragon 16.22.1 https://developer.riotgames.com/docs/lol#data-dragon
+Aatrox	亚托克斯
+Agony's Embrace	痛苦之拥
+Ahri	阿狸
+Akali	阿卡丽
+Akshan	阿克尚
+Alistar	阿利斯塔
+Ambessa	安蓓萨	label
+Amumu	阿木木
+Anivia	艾尼维亚
+Annie	安妮	label
+Aphelios	厄斐琉斯
+Ashe	艾希
+Aurelion Sol	奥瑞利安·索尔
+Aurora	阿萝拉	label
+Azir	阿兹尔
+Bard	巴德	label
+Bel'Veth	卑尔维斯
+Blitzcrank	布里茨
+Brand	布兰德	label
+Braum	布隆
+Briar	贝蕾亚
+Caitlyn	凯特琳	label
+Camille	卡蜜尔
+Cassiopeia	卡西奥佩娅
+Cho'Gath	科加斯
+Corki	库奇
+Darius	德莱厄斯
+Daughter of the Void	虚空之女
+Demacia's Wings	德玛西亚之翼
+Diana	黛安娜	label
+Dr. Mundo	蒙多医生
+Draven	德莱文	label
+Ekko	艾克
+Elise	伊莉丝
+Empress of the Elements	元素女皇
+Evelynn	伊芙琳
+Ezreal	伊泽瑞尔	label
+Fiddlesticks	费德提克
+Fiora	菲奥娜
+Fizz	菲兹	label
+Fury of the North	北地之怒
+Galio	加里奥	label
+Gangplank	普朗克
+Garen	盖伦
+Gnar	纳尔
+Gragas	古拉加斯
+Grandmaster at Arms	武器大师
+Graves	格雷福斯	label
+Gwen	格温	label
+Hecarim	赫卡里姆
+Heimerdinger	黑默丁格
+Hwei	彗
+Illaoi	俄洛伊
+Irelia	艾瑞莉娅
+Ivern	艾翁
+Janna	迦娜
+Jarvan IV	嘉文四世
+Jax	贾克斯	label
+Jayce	杰斯
+Jhin	烬
+Jinx	金克丝	label
+K'Sante	奎桑提
+Kai'Sa	卡莎
+Kalista	卡莉丝塔
+Karma	卡尔玛	label
+Karthus	卡尔萨斯
+Kassadin	卡萨丁
+Katarina	卡特琳娜
+Kayle	凯尔
+Kayn	凯隐
+Keeper of the Hammer	圣锤之毅
+Kennen	凯南
+Kha'Zix	卡兹克
+Kindred	千珏	label
+Kled	克烈
+Kog'Maw	克格莫
+LeBlanc	乐芙兰
+Lee Sin	李青
+Leona	蕾欧娜
+Lillia	莉莉娅
+Lissandra	丽桑卓
+Locke	洛克
+Lucian	卢锡安
+Lulu	璐璐
+Lux	拉克丝
+Malphite	墨菲特
+Malzahar	玛尔扎哈
+Maokai	茂凯
+Master Yi	易
+Matriarch of War	铁血狼母
+Maven of the Strings	琴瑟仙女
+Mel	梅尔	label
+Milio	米利欧	label
+Miss Fortune	厄运小姐
+Mordekaiser	莫德凯撒
+Morgana	莫甘娜
+Naafiri	纳亚菲利
+Nami	娜美
+Nasus	内瑟斯
+Nautilus	诺提勒斯
+Neeko	妮蔻
+Nidalee	奈德丽
+Nilah	尼菈	label
+Nocturne	魔腾
+Nunu & Willump	努努和威朗普
+Olaf	奥拉夫
+Orianna	奥莉安娜
+Ornn	奥恩
+Pantheon	潘森
+Poppy	波比	label
+Pyke	派克
+Qiyana	奇亚娜
+Quinn	奎因	label
+Rakan	洛
+Rammus	拉莫斯
+Rek'Sai	雷克塞
+Rell	芮尔
+Renata Glasc	烈娜塔 · 戈拉斯克
+Renekton	雷克顿
+Rengar	雷恩加尔
+Rise of the Thorns	荆棘之兴
+Riven	锐雯
+Rumble	兰博
+Ryze	瑞兹	label
+Samira	莎弥拉	label
+Scorn of the Moon	皎月女神
+Sejuani	瑟庄妮
+Senna	赛娜
+Seraphine	萨勒芬妮
+Sett	瑟提
+Shaco	萨科
+Shard of the Monolith	熔岩巨兽
+Shen	慎
+Shepherd of Souls	牧魂人
+Shyvana	希瓦娜
+Singed	辛吉德	label
+Sion	赛恩
+Sivir	希维尔
+Skarner	斯卡纳
+Smolder	斯莫德
+Sona	娑娜	label
+Soraka	索拉卡
+Swain	斯维因
+Sylas	塞拉斯
+Syndra	辛德拉
+Tahm Kench	塔姆
+Taliyah	塔莉垭
+Talon	泰隆	label
+Taric	塔里克
+Teemo	提莫
+the Ancient Fear	远古恐惧
+the Armordillo	披甲龙龟
+the Arrow of Retribution	惩戒之箭
+the Ashen Exorcist	灰烬驱魔人
+the Aspect of Twilight	暮光星灵
+the Barbarian King	蛮族之王
+the Bashful Bloom	含羞蓓蕾
+the Battle Mistress	战争女神
+the Berserker	狂战士
+the Bestial Huntress	狂野女猎手
+the Blade Dancer	刀锋舞者
+the Blade's Shadow	刀锋之影
+the Blind Monk	盲僧
+the Bloodharbor Ripper	血港鬼影
+the Boss	腕豪	label
+the Bounty Hunter	赏金猎人
+the Boy and His Yeti	雪原双子
+the Boy Who Shattered Time	时间刺客
+the Burning Vengeance	复仇焰魂
+the Butcher of the Sands	荒漠屠夫
+the Cantankerous Cavalier	暴怒骑士
+the Card Master	卡牌大师
+the Chain Warden	魂锁典狱长
+The Charmer	幻翎
+the Chem-Baroness	炼金男爵
+the Chronokeeper	时光守护者
+the Colossus	正义巨像
+the Crimson Reaper	猩红收割者
+the Cryophoenix	冰晶凤凰
+the Curator of the Sands	沙漠死神
+the Curious Chameleon	万花通灵
+the Daring Bombardier	英勇投弹手
+the Dark Child	黑暗之女
+the Dark Sovereign	暗黑元首
+the Darkin Blade	暗裔剑魔
+the Deathsinger	死亡颂唱者
+the Deceiver	诡术妖姬
+the Defender of Tomorrow	未来守护者
+the Demon Jester	恶魔小丑
+the Desert Rose	沙漠玫瑰
+the Dreadnought	无畏战车
+the Emperor of the Sands	沙漠皇帝
+the Empress of the Void	虚空女皇
+the Enlightened One	天启者
+The Eternal Hunters	永猎双子
+the Eternal Nightmare	永恒梦魇
+the Exemplar of Demacia	德玛西亚皇子
+the Exile	放逐之刃
+the Eye of the Void	虚空之眼
+the Eye of Twilight	暮光之眼
+the Fae Sorceress	仙灵女巫
+the Fallen	堕落天使
+the Fiery Fledgling	炽炎雏龙
+The Fire below the Mountain	山隐之焰
+the Frost Archer	寒冰射手
+The Gentle Flame	明烛
+the Gloomist	愁云使者
+the Glorious Executioner	荣耀行刑官
+the Grand Duelist	无双剑姬
+the Great Steam Golem	蒸汽机器人
+the Green Father	翠神
+the Half-Dragon	龙血武姬
+The Hallowed Seamstress	灵罗娃娃
+the Hand of Noxus	诺克萨斯之手
+the Heart of the Freljord	弗雷尔卓德之心
+the Heart of the Tempest	狂暴之心
+the Herald of the Arcane	奥术先驱
+the Hexplosives Expert	爆破鬼才
+the Hound of a Hundred Bites	百裂冥犬
+the Ice Witch	冰霜女巫
+the Iron Maiden	镕铁少女
+the Iron Revenant	铁铠冥魂
+the Joy Unbound	不羁之悦
+the Kraken Priestess	海兽祭司
+the Lady of Clockwork	发条魔灵
+the Lady of Luminosity	光辉女郎
+the Loose Cannon	暴走萝莉
+the Mad Chemist	炼金术士
+the Madman of Zaun	祖安狂人
+the Magical Cat	魔法猫咪
+the Magus Ascendant	远古巫灵
+the Master of Shadows	影流之主
+the Mechanized Menace	机械公敌
+The Might of Demacia	德玛西亚之力
+the Minotaur	牛头酋长
+the Missing Link	迷失之牙
+the Monkey King	齐天大圣
+the Mouth of the Abyss	深渊巨口
+the Night Hunter	暗夜猎手
+the Nine-Tailed Fox	九尾妖狐
+the Noxian Grand General	诺克萨斯统领
+the Outlaw	法外狂徒
+the Piltover Enforcer	皮城执法官
+the Plague Rat	瘟疫之源
+the Pride of Nazumah	纳祖芒荣耀
+the Pridestalker	傲之追猎者
+the Primordial Sovereign	上古领主
+the Prodigal Explorer	探险家
+the Prophet of the Void	虚空先知
+the Purifier	圣枪游侠
+the Rabble Rouser	酒桶
+the Radiant Dawn	曙光女神
+the Rebel	逆羽
+the Redeemer	涤魂圣枪
+the Relentless Storm	不灭狂雷
+the Restrained Hunger	狂厄蔷薇
+the Revered Inventor	大发明家
+the Righteous	正义天使
+The River King	河流之王
+the Rogue Assassin	离群之刺
+the Rogue Sentinel	影哨
+The Ruined King	破败之王
+the Rune Mage	符文法师
+the Sad Mummy	殇之木乃伊
+the Saltwater Scourge	海洋之灾
+the Secret Weapon	生化魔人
+the Seneschal of Demacia	德邦总管
+the Serpent's Embrace	魔蛇之拥
+the Shadow of War	战争之影
+the Shadow Reaper	影流之镰
+the Sheriff of Piltover	皮城女警	label
+the Shield of Valoran	瓦洛兰之盾
+the Sinister Blade	不祥之刃
+the Soul's Reflection	流光镜影
+The Spark of Zaun	祖安花火
+the Spear of Vengeance	复仇之矛
+the Spider Queen	蜘蛛女皇
+the Spirit Walker	兽灵行者
+The Star Forger	铸星龙王
+the Starchild	众星之子
+the Starry-Eyed Songstress	星籁歌姬
+the Steel Shadow	青钢影
+the Stoneweaver	岩雀
+the Storm's Fury	风暴之怒
+the Swift Scout	迅捷斥候
+the Terror of the Void	虚空恐惧
+the Tidal Trickster	潮汐海灵
+the Tidecaller	唤潮鲛姬
+the Tiny Master of Evil	邪恶小法师
+the Titan of the Depths	深海泰坦
+the Troll King	巨魔之王
+the Twisted Treant	扭曲树精
+the Unbreakable Spear	不屈之枪
+the Unbroken Faith	不破之誓
+the Uncaged Wrath of Zaun	祖安怒兽
+The Undead Juggernaut	亡灵战神
+the Unforgiven	疾风剑豪
+the Unforgotten	封魔剑魂
+the Unshackled	解脱者
+The Unsundered	不落魔锋
+the Virtuoso	戏命师
+the Visionary	异画师
+the Void Burrower	虚空遁地兽
+the Void Walker	虚空行者
+the Voidreaver	虚空掠夺者
+the Wandering Caretaker	星界游神
+the Weapon of the Faithful	残月之肃
+the Witch Between Worlds	双界灵兔
+the Wuju Bladesman	无极剑圣
+the Yordle Gunner	麦林炮手
+Thresh	锤石
+Tristana	崔丝塔娜
+Trundle	特朗德尔	label
+Tryndamere	泰达米尔
+Twisted Fate	崔斯特
+Twitch	图奇	label
+Udyr	乌迪尔
+Urgot	厄加特
+Varus	韦鲁斯
+Vayne	薇恩
+Veigar	维迦
+Vel'Koz	维克兹
+Vex	薇古丝	label
+Vi	蔚	label
+Viego	佛耶戈
+Viktor	维克托	label
+Vladimir	弗拉基米尔
+Volibear	沃利贝尔
+Warwick	沃里克	label
+Wukong	孙悟空
+Xayah	霞
+Xerath	泽拉斯
+Xin Zhao	赵信
+Yasuo	亚索
+Yone	永恩
+Yorick	约里克
+Yunara	芸阿娜
+Yuumi	悠米
+Zaahen	亚恒
+Zac	扎克	label
+Zed	劫
+Zeri	泽丽
+Ziggs	吉格斯
+Zilean	基兰
+Zoe	佐伊	label
+Zyra	婕拉
+
+# 召唤师峡谷商店装备（按装备 ID 对照）
+Abyssal Mask	深渊面具
+Actualizer	实现器	label
+Aether Wisp	以太精魂
+Amplifying Tome	增幅典籍
+Archangel's Staff	大天使之杖
+Ardent Censer	炽热香炉
+Armored Advance	装甲战靴
+Axiom Arc	公理圆弧
+B. F. Sword	暴风之剑
+Bami's Cinder	斑比的熔渣
+Bandleglass Mirror	班德尔玻璃镜
+Bandlepipes	班德尔音管	label
+Banshee's Veil	女妖面纱
+Bastionbreaker	破垒者	label
+Berserker's Greaves	狂战士胫甲
+Black Cleaver	黑色切割者
+Blackfire Torch	黯炎火炬
+Blade of The Ruined King	破败王者之刃
+Blasting Wand	爆裂魔杖
+Blighting Jewel	枯萎珠宝
+Bloodletter's Curse	放血者的诅咒
+Bloodsong	血鸣	label
+Bloodthirster	饮血剑	label
+Boots	鞋子	label
+Boots of Swiftness	轻灵之靴
+Bramble Vest	棘刺背心
+Cappa Juice	帽子饮品
+Catalyst of Aeons	万世催化石
+Caulfield's Warhammer	考尔菲德的战锤
+Celestial Opposition	星界据守
+Chain Vest	锁子甲
+Chainlaced Crushers	带链碾碎者
+Chempunk Chainsword	炼金朋克链锯剑
+Cloak of Agility	灵巧披风
+Cloth Armor	布甲
+Cosmic Drive	星界驱驰
+Crimson Lucidity	猩红明朗
+Cryptbloom	蜕生	label
+Crystalline Bracer	晶体护腕
+Cull	萃取	label
+Dagger	短剑	label
+Dark Seal	黑暗封印
+Dawncore	黎明核心	label
+Dead Man's Plate	亡者的板甲
+Death's Dance	死亡之舞
+Doran's Blade	多兰之刃
+Doran's Bow	多兰之弓
+Doran's Helm	多兰之盔
+Doran's Ring	多兰之戒
+Doran's Shield	多兰之盾
+Dream Maker	圆梦使者
+Dusk and Dawn	黄昏与黎明
+Echoes of Helia	海力亚的回响
+Eclipse	星蚀	label
+Edge of Night	夜之锋刃
+Elixir of Iron	钢铁合剂
+Elixir of Sorcery	巫术合剂
+Elixir of Wrath	愤怒合剂
+Endless Hunger	无穷饥渴
+Essence Reaver	夺萃之镰
+Executioner's Calling	死刑宣告
+Experimental Hexplate	海克斯注力刚壁
+Faerie Charm	仙女护符
+Fated Ashes	命定灰烬
+Fiendhunter Bolts	猎魔人弩箭
+Fiendish Codex	恶魔法典
+Forbidden Idol	禁忌雕像
+Force of Nature	自然之力
+Frozen Heart	冰霜之心
+Giant's Belt	巨人腰带
+Glacial Buckler	冰川圆盾
+Glowing Mote	荧尘
+Gluttonous Greaves	暴食胫甲
+Guardian's Blade	守护者之刃
+Guardian's Hammer	守护者战锤
+Guardian's Horn	守护者号角
+Guardian's Orb	守护者法球
+Guinsoo's Rageblade	鬼索的狂暴之刃
+Gunmetal Greaves	炮铜胫甲
+Gustwalker Hatchling	风行狐幼体
+Haunting Guise	幽魂面具
+Health Potion	生命药水
+Hearthbound Axe	缚炉之斧
+Heartsteel	心之钢	label
+Hexdrinker	海克斯饮魔刀	label
+Hexoptics C44	海克斯镜片 C44
+Hextech Alternator	海克斯科技发电机
+Hextech Gunblade	海克斯科技枪刃
+Hextech Rocketbelt	海克斯科技火箭腰带
+Hollow Radiance	璀璨回响
+Horizon Focus	视界专注
+Hubris	狂妄	label
+Hullbreaker	破舰者	label
+Iceborn Gauntlet	冰脉护手
+Immortal Path	不朽之路
+Immortal Shieldbow	不朽盾弓
+Imperial Mandate	帝国指令
+Infinity Edge	无尽之刃
+Ionian Boots of Lucidity	明朗之靴
+Jak'Sho, The Protean	千变者贾修
+Kaenic Rookern	败魔
+Kalista's Black Spear	卡莉丝塔的黑色长矛
+Kindlegem	燃烧宝石	label
+Knight's Vow	骑士之誓
+Kraken Slayer	海妖杀手
+Last Whisper	最后的轻语
+Liandry's Torment	兰德里的折磨
+Lich Bane	巫妖之祸
+Locket of the Iron Solari	钢铁烈阳之匣
+Long Sword	长剑
+Lord Dominik's Regards	多米尼克领主的致意
+Lost Chapter	遗失的章节
+Luden's Echo	卢登的回声
+Malignance	残疫	label
+Manamune	魔宗	label
+Maw of Malmortius	玛莫提乌斯之噬
+Mejai's Soulstealer	梅贾的窃魂卷
+Mercurial Scimitar	水银弯刀
+Mercury's Treads	水银之靴
+Mikael's Blessing	米凯尔的祝福
+Moonstone Renewer	月石再生器
+Morellonomicon	莫雷洛秘典	label
+Mortal Reminder	凡性的提醒
+Mosstomper Seedling	踏苔蜥幼苗
+Nashor's Tooth	纳什之牙
+Navori Flickerblade	纳沃利烁刃
+Needlessly Large Rod	无用大棒
+Negatron Cloak	负极斗篷
+Noonquiver	正午箭袋	label
+Null-Magic Mantle	抗魔斗篷
+Oblivion Orb	湮灭宝珠
+Overlord's Bloodmail	霸王血铠
+Phage	净蚀	label
+Phantom Dancer	幻影之舞
+Pickaxe	十字镐	label
+Plated Steelcaps	铁板靴
+Profane Hydra	亵渎九头蛇
+Protoplasm Harness	原生质护带
+Quicksilver Sash	水银饰带
+Rabadon's Deathcap	灭世者的死亡之帽
+Randuin's Omen	兰顿之兆
+Rapid Firecannon	疾射火炮
+Ravenous Hydra	贪欲九头蛇
+Rectrix	剑翎	label
+Recurve Bow	反曲之弓
+Redemption	救赎	label
+Refillable Potion	复用型药水
+Rejuvenation Bead	治疗宝珠
+Riftmaker	裂隙制造者	label
+Rod of Ages	时光之杖
+Ruby Crystal	红水晶
+Runaan's Hurricane	卢安娜的飓风
+Rylai's Crystal Scepter	瑞莱的冰晶节杖
+Sapphire Crystal	蓝水晶
+Scarecrow Effigy	草间人
+Scorchclaw Pup	焰爪猫幼崽
+Scout's Slingshot	斥候弹弓
+Seeker's Armguard	探索者的护臂
+Serpent's Fang	巨蛇之牙
+Serrated Dirk	锯齿短匕
+Serylda's Grudge	赛瑞尔达的怨恨
+Shadowflame	影焰	label
+Shattered Armguard	碎裂的护臂
+Sheen	耀光	label
+Shurelya's Battlesong	舒瑞娅的战歌
+Solstice Sleigh	摩天雪橇
+Sorcerer's Shoes	法师之靴
+Spear of Shojin	朔极之矛
+Spectre's Cowl	幽魂斗篷
+Spellslinger's Shoes	灵能使之靴
+Spirit Visage	振奋盔甲
+Staff of Flowing Water	流水法杖
+Statikk Shiv	斯塔缇克电刃
+Steel Sigil	钢铁印章
+Sterak's Gage	斯特拉克的挑战护手
+Stormrazor	岚切	label
+Stormsurge	风暴狂涌	label
+Stridebreaker	挺进破坏者	label
+Sundered Sky	焚天
+Sunfire Aegis	日炎圣盾
+Swiftmarch	迅速进军	label
+Tear of the Goddess	女神之泪
+Terminus	界弓	label
+The Brutalizer	残暴之力
+The Collector	收集者
+Thornmail	荆棘之甲	label
+Tiamat	提亚马特	label
+Titanic Hydra	巨型九头蛇
+Trinity Force	三相之力
+Tunneler	掘道钻头	label
+Umbral Glaive	黯影阔剑
+Unending Despair	无终恨意
+Vampiric Scepter	吸血鬼节杖
+Verdant Barrier	翠绿屏障
+Void Staff	虚空之杖
+Voltaic Cyclosword	电震涡流剑
+Warden's Mail	守望者铠甲
+Warmog's Armor	狂徒铠甲
+Whispering Circlet	耳语头环
+Winged Moonplate	带翼的月板甲
+Winter's Approach	凛冬之临
+Wit's End	智慧末刃
+World Atlas	云游图鉴
+Youmuu's Ghostblade	幽梦之灵
+Yun Tal Wildarrows	育恩塔尔荒野箭
+Zaz'Zak's Realmspike	扎兹沙克的溃口
+Zeal	狂热	label
+Zeke's Convergence	基克的聚合
+Zhonya's Hourglass	中娅沙漏
