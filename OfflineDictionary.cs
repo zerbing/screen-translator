@@ -10,6 +10,7 @@ internal sealed partial class OfflineDictionary : IDisposable
     public const string Source = "ECDICT · 离线";
 
     private readonly object archiveLock = new();
+    private static readonly Lazy<Dictionary<string, int>> Frequencies = new(LoadFrequencies);
     private readonly Lazy<ZipArchive> archive = new(() => new ZipArchive(
         typeof(OfflineDictionary).Assembly.GetManifestResourceStream("ScreenTranslator.Dictionaries.ECDICT.zip")
             ?? throw new InvalidDataException("The ECDICT dictionary is missing.")));
@@ -20,6 +21,28 @@ internal sealed partial class OfflineDictionary : IDisposable
     public string? Find(string text) => FindEntry(text)?.Definition;
 
     public string? FindPronunciation(string text) => FindEntry(text)?.Pronunciation;
+
+    internal string? FindHeadword(string text) => FindEntry(text)?.Headword;
+
+    internal int FrequencyRank(string text) => Frequencies.Value.GetValueOrDefault(text);
+
+    internal static bool IsFrequentWord(string text) => Frequencies.Value.GetValueOrDefault(text) > 0;
+
+    private static Dictionary<string, int> LoadFrequencies()
+    {
+        using var source = typeof(OfflineDictionary).Assembly.GetManifestResourceStream(
+            "ScreenTranslator.Dictionaries.ECDICT-Frequencies.tsv.gz")
+            ?? throw new InvalidDataException("The ECDICT frequency index is missing.");
+        using var compressed = new GZipStream(source, CompressionMode.Decompress);
+        using var reader = new StreamReader(compressed);
+        var ranks = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        while (reader.ReadLine() is { } line)
+        {
+            var delimiter = line.IndexOf('\t');
+            ranks.Add(line[..delimiter], int.Parse(line[(delimiter + 1)..], CultureInfo.InvariantCulture));
+        }
+        return ranks;
+    }
 
     private Entry? FindEntry(string text)
     {
@@ -57,7 +80,7 @@ internal sealed partial class OfflineDictionary : IDisposable
                 var phoneticEnd = line.IndexOf('\t', delimiter + 1);
                 var phonetic = line[(delimiter + 1)..phoneticEnd];
                 var definition = line[(phoneticEnd + 1)..].Replace('\t', '\n');
-                var match = new Entry(definition, phonetic.Length == 0 ? null : phonetic);
+                var match = new Entry(definition, phonetic.Length == 0 ? null : phonetic, key.ToString());
                 if (key.SequenceEqual(word))
                     return match;
                 if (fallback is null || key.SequenceEqual(folded))
@@ -67,7 +90,7 @@ internal sealed partial class OfflineDictionary : IDisposable
         }
     }
 
-    private sealed record Entry(string Definition, string? Pronunciation);
+    private sealed record Entry(string Definition, string? Pronunciation, string Headword);
 
     public void Dispose()
     {

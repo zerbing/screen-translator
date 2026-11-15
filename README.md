@@ -13,7 +13,7 @@ Windows 屏幕英中翻译工具，适合玩游戏或使用英文软件时随手
 
 ## 开始使用
 
-下载并运行 `ScreenTranslator.exe`。需要 Windows 10 2004 或更新版本（x64）、.NET 8 Desktop Runtime 和 Windows 英文 OCR 语言包。朗读需要 Windows 英语语音包。[下载程序](https://github.com/zerbing/screen-translator/releases/latest) · [.NET 8 下载](https://dotnet.microsoft.com/download/dotnet/8.0) · [安装英文 OCR](https://learn.microsoft.com/zh-cn/windows/powertoys/text-extractor)
+解压完整程序包后运行 `ScreenTranslator.exe`，保留同目录的 `OcrModels` 和 `x64` 文件夹。需要 Windows 10 2004 或更新版本（x64）、.NET 8 Desktop Runtime、Windows 英文 OCR 语言包及 Visual C++ x64 运行库。朗读需要 Windows 英语语音包。[下载程序](https://github.com/zerbing/screen-translator/releases/latest) · [.NET 8 下载](https://dotnet.microsoft.com/download/dotnet/8.0) · [Visual C++ x64 运行库](https://aka.ms/vs/17/release/vc_redist.x64.exe) · [安装英文 OCR](https://learn.microsoft.com/zh-cn/windows/powertoys/text-extractor)
 
 | 操作 | 默认用法 |
 | --- | --- |
@@ -27,7 +27,7 @@ Windows 屏幕英中翻译工具，适合玩游戏或使用英文软件时随手
 
 程序按文字所在的应用加载词库，目前适配原神、Minecraft、Excel、VS Code、Blender 等游戏和软件。[查看完整列表](Glossaries/Applications.tsv) · [原神词库数据来源](https://genshin-dictionary.com/opendata)
 
-截图在本机处理。查单词时优先使用应用专用词库和内置的 ECDICT 英汉词典，查不到再联网。通用段落翻译需要联网，翻译服务只接收文本。[ECDICT 数据](https://github.com/skywind3000/ECDICT/tree/39cfb9672c0906b63569e0453c2e6abfb9ab182a) · [MIT 许可](Dictionaries/ECDICT-LICENSE.txt)
+截图使用 Windows OCR 与内置离线模型在本机处理。[OCR 模型与许可](OcrModels/README.md)。查单词时优先使用应用专用词库和内置的 ECDICT 英汉词典，查不到再联网。通用段落翻译需要联网，翻译服务只接收文本。[ECDICT 数据](https://github.com/skywind3000/ECDICT/tree/39cfb9672c0906b63569e0453c2e6abfb9ab182a) · [MIT 许可](Dictionaries/ECDICT-LICENSE.txt)
 
 在主界面或托盘菜单打开「翻译设置」，可以选择自动、Google、MyMemory、百度翻译或 DeepSeek。默认的自动模式无需配置，按 Google、MyMemory 的顺序尝试。手动选择时，联网请求只使用所选引擎。填写的密钥会在本机加密保存。
 

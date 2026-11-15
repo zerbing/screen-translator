@@ -6,6 +6,22 @@ internal static class GenshinMapLabels
 {
     private static readonly Lazy<(string Text, string Key)[]> Names = new(Load);
 
+    internal static bool MightBeLabel(string text)
+    {
+        var key = Key(text);
+        return key.Length >= 6 && Names.Value.Any(name =>
+            Math.Abs(key.Length - name.Key.Length) <= 3 && EditDistance(key, name.Key) <= 3
+            || key.Length >= name.Key.Length * .5f && name.Key.Contains(key, StringComparison.Ordinal));
+    }
+
+    internal static bool IsKnownLabel(string text) => Names.Value.Any(name => name.Text == text);
+
+    internal static bool IsLabelFragment(string text)
+    {
+        var key = Key(text);
+        return key.Length >= 3 && Names.Value.Any(name => name.Key.Contains(key, StringComparison.Ordinal));
+    }
+
     public static ScreenLine? At(ScreenLine[] source, Point cursor)
     {
         var words = source.SelectMany(line => line.Words)

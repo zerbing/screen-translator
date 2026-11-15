@@ -10,6 +10,7 @@ var fixtureRoot = args.FirstOrDefault(arg => arg != "--zoom-matrix") ?? Path.Com
     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ScreenTranslatorDev", "ocr-fixtures");
 var failures = 0;
 var checks = 0;
+var zoomResults = new Dictionary<double, (int Checks, int Failures)>();
 var settingsPath = Path.Combine(Path.GetTempPath(), $"screen-translator-settings-{Guid.NewGuid():N}.json");
 try
 {
@@ -52,7 +53,7 @@ finally
     File.Delete(credentialsPath);
     File.Delete(credentialsPath + ".tmp");
 }
-var ocr = ScreenOcr.Create() ?? throw new InvalidOperationException("Windows English OCR is required.");
+using var ocr = ScreenOcr.Create() ?? throw new InvalidOperationException("Windows English OCR is required.");
 var applications = new ApplicationGlossaries();
 var genshin = applications.ForProcess("YuanShen")!;
 var excel = applications.ForProcess("excel")!;
@@ -116,6 +117,12 @@ using (var translator = new Translator())
     Check("Genshin greeting leaves word selection unchanged", "abyssosque", SelectWords(greeting, genshin, 230)?.Text);
     Check("Genshin greeting has no standalone abyssosque term", null, genshin.FindParagraphLabel("abyssosque"));
     Check("Genshin greeting glossary isolation", null, league.FindParagraphLabel(greeting));
+    const string guildGreeting = "Ad astra abyssosque! Welcome to the Adventurers' Guild Headquarters.";
+    var completeGreeting = await translator.TranslateAsync(new Selection(guildGreeting, "", RectangleF.Empty),
+        true, genshin, null, default);
+    Check("Genshin fixed greeting inside the complete dialogue", "向着星辰与深渊！ 欢迎来到冒险家协会总部。", completeGreeting.Text);
+    Check("Genshin complete greeting uses its offline glossary", genshin.Source, completeGreeting.Source);
+    Check("paragraph phrases stay out of hover lookup", "冒险家协会", SelectWords("Adventurers' Guild", genshin)?.Term);
 }
 Check("unknown app", null, applications.ForProcess("chrome")?.Id);
 Check("unsupported app in supported mode", "False", applications.IsSupported("chrome").ToString());
@@ -247,6 +254,20 @@ finally
 }
 
 const string quest = "Use the lamp crystal to light up the secret message";
+await TestFixture("genshin-guild-greeting", Paragraphs(
+    "Ad astra abyssosque! Welcome to the Adventurers' Guild Headquarters.", (750, 211), (800, 286), (1420, 284)));
+await TestFixture("pale-crown-palace", new[] { 107, 259, 423 }.SelectMany(x => new[]
+{
+    new Sample(x, 62, false, "Pale Crown Palace", "白冕宫"), new Sample(x, 62, true, "Pale Crown Palace")
+}));
+await TestFixture("pale-crown-palace-context", new[] { 94, 236, 395 }.SelectMany(x => new[]
+{
+    new Sample(x, 42, false, "Pale Crown Palace", "白冕宫"), new Sample(x, 42, true, "Pale Crown Palace")
+}));
+await TestFixture("teplo-oasis", Paragraphs("Teplo Oasis", (228, 64), (353, 64)));
+await TestFixture("disturbance-outbreak", Paragraphs("Disturbance Outbreak", (72, 51), (271, 50), (493, 51))
+    .Concat(Paragraphs("5 day(s) 2 hour(s)", (73, 122), (201, 120), (391, 122)))
+    .Concat([new Sample(180, 51, false, "Disturbance"), new Sample(435, 51, false, "Outbreak")]));
 await TestFixture("world-map", new (int X, int Y, string Name, string Chinese)[]
 {
     (451, 483, "Stormterror's Lair", "风龙废墟"), (802, 484, "Stormterror's Lair", "风龙废墟"),
@@ -503,7 +524,7 @@ using (var sidebar = new Bitmap(Path.Combine(fixtureRoot, "mixed-sidebar-codex.p
             await TestSample($"mixed-sidebar-codex at {zoom:P0}", frame, point with
             {
                 X = 280 + (int)Math.Round(point.X * zoom), Y = 60 + (int)Math.Round(point.Y * zoom)
-            }, 1, game: false, dpi: 1.75f);
+            }, 1, game: false, dpi: 1.75f, reportedZoom: zoom);
     }
 }
 await TestDesktopText("mixed-filename", [
@@ -528,7 +549,8 @@ using (var muted = new Bitmap(Path.Combine(fixtureRoot, "muted-mixed-text-follow
         {
             for (var x = from; x <= to; x += 8)
                 await TestSample($"muted-mixed-text-followup {zoom:P0}", viewer,
-                    new Sample(480 + (int)(x * zoom), 80 + (int)(168 * zoom), false, expectedWord), 1, game: false, dpi: 1.75f);
+                    new Sample(480 + (int)(x * zoom), 80 + (int)(168 * zoom), false, expectedWord), 1, game: false, dpi: 1.75f,
+                    reportedZoom: zoom);
         }
     }
 }
@@ -565,7 +587,7 @@ using (var displaySample = new Bitmap(Path.Combine(fixtureRoot, "heavy-display-t
             await TestSample($"display at {zoom:P0}", window, point with
             {
                 X = 1130 + (int)Math.Round(point.X * zoom), Y = 236 + (int)Math.Round(point.Y * zoom)
-            }, 1, game: false, dpi: 1.75f);
+            }, 1, game: false, dpi: 1.75f, reportedZoom: zoom);
     }
 }
 await TestDesktopText("desktop-grid", [
@@ -598,7 +620,7 @@ using (var logo = new Bitmap(Path.Combine(fixtureRoot, "white-cutout-logo.png"))
             await TestSample($"white-cutout-logo at {zoom:P0}", window, point with
             {
                 X = 600 + (int)Math.Round(point.X * zoom), Y = 100 + (int)Math.Round(point.Y * zoom)
-            }, 1, game: false);
+            }, 1, game: false, reportedZoom: zoom);
     }
 }
 Sample[] videoOverlayPoints = [
@@ -633,7 +655,7 @@ using (var scoreboard = new Bitmap(Path.Combine(fixtureRoot, "league-scoreboard.
         {
             await TestSample($"scoreboard at {zoom:P0}", window,
                 new Sample(700 + (int)Math.Round(x * zoom), 85 + (int)Math.Round(y * zoom), false, expectedWord),
-                1, game: false, dpi: 1.75f);
+                1, game: false, dpi: 1.75f, reportedZoom: zoom);
         }
     }
 }
@@ -663,10 +685,15 @@ async Task TestDesktopText(string name, Sample[] samples, Color? canvasBackgroun
         foreach (var sample in samples)
             await TestSample(zoom == 1 ? name + " inside window" : $"{name} inside window at {zoom:P0}", canvas,
                 sample with { X = 700 + (int)(sample.X * zoom), Y = 85 + (int)(sample.Y * zoom) }, 1,
-                game: false, dpi: canvasDpi);
+                game: false, dpi: canvasDpi, reportedZoom: zoom);
     }
 }
 
+foreach (var zoom in zoomMatrix ? requiredZooms.AsEnumerable() : zoomResults.Keys.OrderDescending())
+{
+    var result = zoomResults.GetValueOrDefault(zoom);
+    Console.WriteLine($"{zoom:P0}: {result.Checks - result.Failures}/{result.Checks} checks passed.");
+}
 Console.WriteLine($"{checks - failures}/{checks} checks passed.");
 return failures == 0 ? 0 : 1;
 
@@ -705,8 +732,11 @@ async Task TestRenderedZooms(string name, Bitmap image, IEnumerable<Sample> samp
     }
 }
 
-async Task TestSample(string name, Bitmap frame, Sample sample, double ratio, bool game = true, float dpi = 1)
+async Task TestSample(string name, Bitmap frame, Sample sample, double ratio, bool game = true, float dpi = 1,
+    double? reportedZoom = null)
 {
+    var checksBefore = checks;
+    var failuresBefore = failures;
     var cursor = new Point((int)(sample.X * ratio), (int)(sample.Y * ratio));
     var area = new Rectangle(Point.Empty, frame.Size);
     var capture = HoverRecognition.CaptureArea(area, cursor, dpi, sample.Paragraph);
@@ -721,6 +751,9 @@ async Task TestSample(string name, Bitmap frame, Sample sample, double ratio, bo
         var term = target?.Term ?? genshin.Find(actual).SingleOrDefault()?.Chinese;
         Check($"{description} glossary", chinese, term);
     }
+    var zoom = reportedZoom ?? ratio;
+    var result = zoomResults.GetValueOrDefault(zoom);
+    zoomResults[zoom] = (result.Checks + checks - checksBefore, result.Failures + failures - failuresBefore);
 
     async Task<ScreenLine[]> Read(Rectangle region, float scale, Point point, Func<ScreenLine[], bool>? hasTarget,
         CancellationToken token, bool allowMixedText, bool largeDisplayOnly, bool paragraph)

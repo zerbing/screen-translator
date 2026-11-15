@@ -1,13 +1,16 @@
 # 回归测试样本
 
-使用 Windows 英文 OCR 语言包与 .NET 8 SDK。从项目根目录运行 `dotnet run -c Release --project tests/ScreenTranslator.Regression.csproj`。任一断言失败或缺少样本时，测试会以非零状态退出。
+使用 Windows 英文 OCR 语言包与 .NET 8 SDK，构建时会复制仓库中的离线 OCR 模型和本地库。从项目根目录运行 `dotnet run -c Release --project tests/ScreenTranslator.Regression.csproj`。任一断言失败或缺少样本时，测试会以非零状态退出。
 
 截图存放在本机 `%LOCALAPPDATA%\ScreenTranslatorDev\ocr-fixtures`。鼠标坐标和预期英文文本记录在 `Program.cs`。游戏截图在原始 3840×2160 及缩放后的 1920×1080 各跑一次。
 
-在命令末尾加上 `-- --zoom-matrix`，可将截图用例统一跑在 175%、150%、125%、100%、75% 和 50% 六档。默认运行仍使用各用例原有的缩放比例。
+在命令末尾加上 `-- --zoom-matrix`，可将所有现有截图用例统一跑在 175%、150%、125%、100%、75% 和 50% 六档，包括图片窗口中的缩放场景。运行结束后分别报告每档通过的断言数。默认运行仍使用各用例原有的缩放比例和断言。
 
 | 文件 | 回归场景 |
 | --- | --- |
+| `disturbance-outbreak.png` | 金色活动标题和倒计时分别完整识别，标题不丢失开头，也不与下一行串选 |
+| `genshin-guild-greeting.png` | 冒险家协会两行欢迎语完整识别，与上方人物名分离；固定问候语采用原神译法 |
+| `pale-crown-palace.png`、`pale-crown-palace-context.png`、`teplo-oasis.png` | 浅色地图和图标背景上的地名完整识别，覆盖有无翻译浮窗的截图 |
 | `quest-rock.png` | 石壁背景下的两行任务文字，单词可独立选择，距离数字留在译文之外 |
 | `quest-crystals.png` | 同一任务换成高亮晶体背景，鼠标停在句首、行尾和第二行都能读全 |
 | `dialogue.png` | 连续三行字幕、说话人名字和两个独立对话选项 |
@@ -44,4 +47,6 @@
 
 程序另外生成深色斜体和金色斜体样本，并验证 `in`、`in front of`、各应用词库及缓存隔离。
 
-桌面图标和中英混排的截图按原始尺寸测试。中英混排用例需要安装 Windows 简体中文 OCR 语言包。
+默认运行时，桌面图标和中英混排截图按各用例原有尺寸测试；`--zoom-matrix` 同样覆盖六档。中英混排用例需要安装 Windows 简体中文 OCR 语言包。
+
+窄体字识别使用已有 ECDICT 数据中的 BNC 和当代语料库词频辅助判断候选结果。索引与词典使用相同的数据来源和 MIT 许可，可用 `python scripts/import_ecdict_frequencies.py ecdict.csv Dictionaries/ECDICT-Frequencies.tsv.gz` 重建。[数据字段说明](https://github.com/skywind3000/ECDICT/blob/39cfb9672c0906b63569e0453c2e6abfb9ab182a/README.md#数据格式)

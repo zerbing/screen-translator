@@ -12,7 +12,8 @@ namespace ScreenTranslator;
 
 internal sealed partial class TermGlossary
 {
-    private sealed record Term(string MatchText, string English, string Chinese, bool Imported, bool QuotedOnly = false);
+    private sealed record Term(string MatchText, string English, string Chinese, bool Imported, bool QuotedOnly = false,
+        bool ParagraphOnly = false);
     public sealed record Hit(int Index, int Length, string English, string Chinese, bool Imported);
 
     private readonly Dictionary<string, List<Term>> termsByFirstWord = new(StringComparer.OrdinalIgnoreCase);
@@ -55,6 +56,7 @@ internal sealed partial class TermGlossary
             if (fields.Length == 3 && fields[2] == "paragraph")
             {
                 paragraphLabels.TryAdd(fields[0], fields[1]);
+                Add(new Term(fields[0], fields[0], fields[1], imported, ParagraphOnly: true));
                 continue;
             }
             if (fields.Length == 3 && fields[2] is "label" or "title")
@@ -134,7 +136,7 @@ internal sealed partial class TermGlossary
         return original.Equals(hit.English, StringComparison.OrdinalIgnoreCase) ? original : hit.English;
     }
 
-    public IEnumerable<Hit> Find(string text, bool forHover = false)
+    public IEnumerable<Hit> Find(string text, bool forHover = false, bool forParagraph = false)
     {
         var nextStart = 0;
         foreach (Match word in Word().Matches(text))
@@ -143,6 +145,8 @@ internal sealed partial class TermGlossary
                 continue;
             foreach (var candidate in candidates)
             {
+                if (candidate.ParagraphOnly && !forParagraph)
+                    continue;
                 var end = word.Index + candidate.MatchText.Length;
                 if (end > text.Length || (end < text.Length && char.IsLetterOrDigit(text[end])))
                     continue;
@@ -150,7 +154,13 @@ internal sealed partial class TermGlossary
                     continue;
                 var comparison = candidate.Imported && !forHover ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
                 if (!text.AsSpan(word.Index, candidate.MatchText.Length).Equals(candidate.MatchText, comparison))
-                    continue;
+                {
+                    // A fixed sentence can have its final period mistaken for a comma by OCR.
+                    if (!candidate.ParagraphOnly || candidate.MatchText[^1] != '.' || text[end - 1] != ','
+                        || !text.AsSpan(word.Index, candidate.MatchText.Length - 1)
+                            .Equals(candidate.MatchText.AsSpan(0, candidate.MatchText.Length - 1), comparison))
+                        continue;
+                }
 
                 yield return new Hit(word.Index, candidate.MatchText.Length, candidate.English, candidate.Chinese, candidate.Imported);
                 nextStart = end;
@@ -179,7 +189,7 @@ internal sealed partial class TermGlossary
     public string CorrectOcr(string text)
     {
         text = Normalize(text);
-        return Replace(text, Find(text).Where(hit => !hit.Imported), hit => MatchedEnglish(text, hit));
+        return Replace(text, Find(text, forParagraph: true).Where(hit => !hit.Imported), hit => MatchedEnglish(text, hit));
     }
 
     public static string Normalize(string text) => text.Replace('’', '\'').Replace('‘', '\'');
@@ -195,9 +205,16 @@ internal sealed partial class Translator : IDisposable
 {
     private static readonly Dictionary<string, string> PartsOfSpeech = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["noun"] = "名词", ["verb"] = "动词", ["adjective"] = "形容词", ["adverb"] = "副词",
-        ["preposition"] = "介词", ["pronoun"] = "代词", ["interjection"] = "感叹词",
-        ["conjunction"] = "连词", ["abbreviation"] = "缩写", ["exclamation"] = "感叹词"
+        ["noun"] = "名词",
+        ["verb"] = "动词",
+        ["adjective"] = "形容词",
+        ["adverb"] = "副词",
+        ["preposition"] = "介词",
+        ["pronoun"] = "代词",
+        ["interjection"] = "感叹词",
+        ["conjunction"] = "连词",
+        ["abbreviation"] = "缩写",
+        ["exclamation"] = "感叹词"
     };
 
     private readonly HttpClient http = new(new SocketsHttpHandler
@@ -205,14 +222,16 @@ internal sealed partial class Translator : IDisposable
         AutomaticDecompression = DecompressionMethods.All,
         ConnectTimeout = TimeSpan.FromSeconds(4),
         PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
-    }) { Timeout = Timeout.InfiniteTimeSpan, DefaultRequestVersion = HttpVersion.Version11 };
+    })
+    { Timeout = Timeout.InfiniteTimeSpan, DefaultRequestVersion = HttpVersion.Version11 };
     private readonly HttpClient directHttp = new(new SocketsHttpHandler
     {
         UseProxy = false,
         AutomaticDecompression = DecompressionMethods.All,
         ConnectTimeout = TimeSpan.FromSeconds(3),
         PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
-    }) { Timeout = Timeout.InfiniteTimeSpan, DefaultRequestVersion = HttpVersion.Version11 };
+    })
+    { Timeout = Timeout.InfiniteTimeSpan, DefaultRequestVersion = HttpVersion.Version11 };
     private readonly TranslationCache cache;
     private readonly OfflineDictionary dictionary = new();
     private long googleAvailableAfter;
@@ -254,10 +273,14 @@ internal sealed partial class Translator : IDisposable
 
         var useAi = !string.IsNullOrWhiteSpace(apiKey);
         var glossaryText = NormalizeForLookup(paragraph ? selection.Text : selection.Context);
-        var hits = glossary is not null && (paragraph || useAi) ? glossary.Find(glossaryText).ToArray() : [];
+        var hits = glossary is not null && (paragraph || useAi)
+            ? glossary.Find(glossaryText, forParagraph: paragraph).ToArray() : [];
         if (paragraph && glossary is not null && hits is [var exact]
             && exact.Index == 0 && exact.Length == glossaryText.Length)
             return new TranslationResult(exact.Chinese, glossary.Source);
+        if (paragraph && glossary is not null && hits.Length != 0
+            && !TermGlossary.Replace(glossaryText, hits, _ => "").Any(char.IsLetterOrDigit))
+            return new TranslationResult(TermGlossary.Replace(glossaryText, hits, hit => hit.Chinese), glossary.Source);
         var online = useAi ? OnlineEngine.Automatic : baidu is not null ? OnlineEngine.Baidu : engine;
         var key = CacheKey(selection, paragraph, glossary, useAi, hits, online);
         if (await cache.GetAsync(key, token) is { } cached
@@ -315,7 +338,12 @@ internal sealed partial class Translator : IDisposable
             version += Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(imported)));
         var data = JsonSerializer.SerializeToUtf8Bytes(new
         {
-            version = 1, text, context, paragraph, genshin, useAi,
+            version = 1,
+            text,
+            context,
+            paragraph,
+            genshin,
+            useAi,
             glossary = version
         });
         var key = Convert.ToHexString(SHA256.HashData(data));
@@ -485,8 +513,11 @@ internal sealed partial class Translator : IDisposable
         catch (Exception error) when (!token.IsCancellationRequested && IsServiceError(error)
             && error is not NoTranslationException
             && error is not HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.PaymentRequired or HttpStatusCode.TooManyRequests }
-            && (!isPaidRequest || error is HttpRequestException { HttpRequestError: HttpRequestError.NameResolutionError
-                or HttpRequestError.ConnectionError or HttpRequestError.SecureConnectionError })
+            && (!isPaidRequest || error is HttpRequestException
+            {
+                HttpRequestError: HttpRequestError.NameResolutionError
+                or HttpRequestError.ConnectionError or HttpRequestError.SecureConnectionError
+            })
             && !HttpClient.DefaultProxy.IsBypassed(uri))
         {
             using var proxyTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);

@@ -6,7 +6,7 @@
     <ApplicationIcon>ScreenTranslator.ico</ApplicationIcon>
     <AssemblyTitle>屏幕翻译</AssemblyTitle>
     <Product>屏幕翻译</Product>
-    <Version>1.0.11</Version>
+    <Version>1.0.12</Version>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -14,8 +14,11 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
+    <PackageReference Include="Tesseract" Version="5.2.0" />
+    <Content Include="OcrModels/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="Glossaries/*.tsv" LogicalName="ScreenTranslator.Glossaries.%(Filename)%(Extension)" />
     <EmbeddedResource Include="Dictionaries/ECDICT.zip" LogicalName="ScreenTranslator.Dictionaries.ECDICT.zip" />
+    <EmbeddedResource Include="Dictionaries/ECDICT-Frequencies.tsv.gz" LogicalName="ScreenTranslator.Dictionaries.ECDICT-Frequencies.tsv.gz" />
     <EmbeddedResource Include="Dictionaries/ECDICT-LICENSE.txt" LogicalName="ScreenTranslator.Dictionaries.ECDICT-LICENSE.txt" />
     <Compile Remove="tests/**/*.cs" />
     <InternalsVisibleTo Include="ScreenTranslator.Regression" />
