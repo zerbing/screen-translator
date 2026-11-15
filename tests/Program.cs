@@ -56,6 +56,8 @@ var genshin = applications.ForProcess("YuanShen")!;
 var excel = applications.ForProcess("excel")!;
 var word = applications.ForProcess("WINWORD")!;
 var league = applications.ForProcess("League of Legends")!;
+const string realmDialogue = "Shadow Realm entered. Switching to Shadow Realm operational mode...";
+const string coloredTutorial = "The Shotgun boasts considerable destructive power. In the Shadow Realm, fire the Shotgun at the fissures on Blightkristall to destroy them.";
 var glossaryCases = new (string Process, string English, string Chinese)[]
 {
     ("YuanShen", "Lawrence", "劳伦斯"), ("GenshinImpact", "Knights of Favonius", "西风骑士团"),
@@ -126,6 +128,10 @@ Check("Genshin term isolation", null, SelectWords("Lawrence", league)?.Term);
 Check("Office term isolation", null, SelectWords("Mail Merge", excel)?.Term);
 Check("return to Genshin", "劳伦斯", SelectWords("Lawrence", genshin)?.Term);
 Check("use term inside paragraph", "数据透视表", excel.Find("Insert a PivotTable in this sheet.").Single().Chinese);
+Check("match both instances of the singular Genshin term", "影域,影域", string.Join(',', genshin.Find(realmDialogue).Select(hit => hit.Chinese)));
+Check("keep the plural Genshin term", "影域", genshin.Find("Shadow Realms").SingleOrDefault()?.Chinese);
+Check("keep the Shadow Realm quest title", "影域的遗留", genshin.Find("Remnants of the Shadow Realm").SingleOrDefault()?.Chinese);
+Check("keep the Genshin term scoped to its app", "0", league.Find(realmDialogue).Count().ToString());
 Check("common preposition", "in", SelectWords("in", genshin)?.Text);
 Check("common phrase", "in front of", SelectWords("in front of the gate", null)?.Text);
 Check("preposition sense", "离线释义", SelectWords("in", null)?.TermSource);
@@ -312,6 +318,13 @@ await TestFixture("dialogue-survive", [
     new Sample(1110, 268, false, "survive"),
     new Sample(1193, 268, false, "survive")
 ]);
+await TestFixture("dialogue-shadow-realm", Paragraphs(realmDialogue, (365, 273), (1390, 270)));
+await TestFixture("tutorial-colored-words", Paragraphs(coloredTutorial, (541, 65), (980, 136), (1500, 138), (2010, 137), (230, 209))
+    .Concat([new Sample(260, 72, false, "Shotgun"), new Sample(1500, 138, false, "fissures")]));
+const string explainDialogue = "(You explain what happened to Koshkin...)";
+await TestFixture("dialogue-explain", Paragraphs(explainDialogue, (420, 91), (490, 93), (567, 95), (640, 95), (340, 153))
+    .Concat([new Sample(420, 91, false, "explain"), new Sample(490, 93, false, "explain"), new Sample(567, 95, false, "explain")]),
+    [1.0, 0.75, 0.5, 1.5]);
 
 foreach (var (fontName, style, ink, background) in new[]
 {
@@ -546,7 +559,7 @@ Selection? SelectWords(string text, TermGlossary? glossary, int hoverX = 30)
 IEnumerable<Sample> Paragraphs(string text, params (int X, int Y)[] points) =>
     points.Select(point => new Sample(point.X, point.Y, true, text));
 
-async Task TestFixture(string name, IEnumerable<Sample> samples)
+async Task TestFixture(string name, IEnumerable<Sample> samples, double[]? ratios = null)
 {
     var path = Path.Combine(fixtureRoot, name + ".png");
     if (!File.Exists(path))
@@ -555,7 +568,7 @@ async Task TestFixture(string name, IEnumerable<Sample> samples)
         return;
     }
     using var image = new Bitmap(path);
-    foreach (var ratio in new[] { 1.0, 0.5 })
+    foreach (var ratio in ratios ?? [1.0, 0.5])
     {
         using var frame = ratio == 1 ? image.Clone(new Rectangle(Point.Empty, image.Size), PixelFormat.Format32bppArgb)
             : new Bitmap(image, (int)(image.Width * ratio), (int)(image.Height * ratio));
@@ -582,10 +595,10 @@ async Task TestSample(string name, Bitmap frame, Sample sample, double ratio, bo
     }
 
     async Task<ScreenLine[]> Read(Rectangle region, float scale, Point point, Func<ScreenLine[], bool>? hasTarget,
-        CancellationToken token, bool allowMixedText, bool largeDisplayOnly)
+        CancellationToken token, bool allowMixedText, bool largeDisplayOnly, bool paragraph)
     {
         using var bitmap = frame.Clone(region, PixelFormat.Format32bppArgb);
-        return await ocr.ReadBitmapAsync(bitmap, region.Location, scale, point, hasTarget, token, allowMixedText, largeDisplayOnly);
+        return await ocr.ReadBitmapAsync(bitmap, region.Location, scale, point, hasTarget, token, allowMixedText, largeDisplayOnly, paragraph);
     }
 }
 

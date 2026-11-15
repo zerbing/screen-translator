@@ -16,6 +16,9 @@
 | `dark-text-ice-you.png`、`dark-text-ice-domovoy.png` | 浅色冰晶背景下，从不同鼠标位置查 `you`、`Domovoy` 及相邻单词 |
 | `domovoy-foreman.png` | 对话行末的 `foreman` 可独立选中 |
 | `dialogue-survive.png` | 从对话里查 `survive`，显示通用离线释义 |
+| `dialogue-shadow-realm.png` | 识别包含两个 `Shadow Realm` 的对话，原神词库能命中两处 |
+| `tutorial-colored-words.png` | 同一段落有浅色正文和黄色强调词，保留完整的三行说明 |
+| `dialogue-explain.png` | 发光边框内的两行对话选项，在 50%、75%、100% 和 150% 下识别 `explain` 和整段 |
 | `world-map.png` | 从地名两端查词和翻译整段，覆盖被地图图标遮挡的地名及换行地名 |
 | `desktop-icon.png` | 从桌面快捷方式两行标签中识别完整的 Desktop |
 | `mixed-text.png` | 从紧贴汉字的文本中取出完整的 hatch-pet |

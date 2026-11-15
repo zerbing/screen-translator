@@ -52,24 +52,24 @@ internal sealed partial class ScreenOcr : IDisposable
     }
 
     public async Task<ScreenLine[]> ReadAsync(Rectangle area, float scale, Point cursor,
-        Func<ScreenLine[], bool>? hasTarget, CancellationToken token, bool allowMixedText, bool largeDisplayOnly)
+        Func<ScreenLine[], bool>? hasTarget, CancellationToken token, bool allowMixedText, bool largeDisplayOnly, bool paragraph)
     {
         token.ThrowIfCancellationRequested();
         using var hdr = hdrCapture.TryRead(area, token);
         if (hdr is not null)
-            return await ReadBitmapAsync(hdr, area.Location, scale, cursor, hasTarget, token, allowMixedText, largeDisplayOnly)
+            return await ReadBitmapAsync(hdr, area.Location, scale, cursor, hasTarget, token, allowMixedText, largeDisplayOnly, paragraph)
                 .ConfigureAwait(false);
 
         using var original = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(original))
             graphics.CopyFromScreen(area.Location, Point.Empty, area.Size, CopyPixelOperation.SourceCopy);
-        return await ReadBitmapAsync(original, area.Location, scale, cursor, hasTarget, token, allowMixedText, largeDisplayOnly)
+        return await ReadBitmapAsync(original, area.Location, scale, cursor, hasTarget, token, allowMixedText, largeDisplayOnly, paragraph)
             .ConfigureAwait(false);
     }
 
     internal async Task<ScreenLine[]> ReadBitmapAsync(Bitmap original, Point origin, float scale,
         Point cursor = default, Func<ScreenLine[], bool>? hasTarget = null, CancellationToken token = default,
-        bool allowMixedText = false, bool largeDisplayOnly = false)
+        bool allowMixedText = false, bool largeDisplayOnly = false, bool paragraph = false)
     {
         var local = new Point(cursor.X - origin.X, cursor.Y - origin.Y);
         if (largeDisplayOnly)
@@ -140,7 +140,7 @@ internal sealed partial class ScreenOcr : IDisposable
                 using var flat = LightTextMask(original, 0, token, fill);
                 var rows = await RecognizeBitmapAsync(flat, origin, scale, token).ConfigureAwait(false);
                 if (hasTarget(rows))
-                    return rows.Select(line => FixSeriesNumeral(line, rows)).ToArray();
+                    return await RefineGameTextAsync(rows.Select(line => FixSeriesNumeral(line, rows)).ToArray()).ConfigureAwait(false);
             }
         }
 
@@ -151,8 +151,11 @@ internal sealed partial class ScreenOcr : IDisposable
             using var mask = LightTextMask(original, cutoff, token);
             var lightLines = await RecognizeBitmapAsync(mask, origin, scale, token).ConfigureAwait(false);
             if (hasTarget(lightLines))
-                return lightLines;
+                return await RefineGameTextAsync(lightLines).ConfigureAwait(false);
         }
+
+        if (paragraph && hasTarget is not null && await ReadWhiteChoiceAsync().ConfigureAwait(false) is { } choice)
+            return choice;
 
         token.ThrowIfCancellationRequested();
         var luminance = allowMixedText ? SampleLuminance(original, local) : null;
@@ -306,6 +309,38 @@ internal sealed partial class ScreenOcr : IDisposable
         token.ThrowIfCancellationRequested();
         using var enhanced = EnhanceLocalContrast(original, token);
         return await RecognizeBitmapAsync(enhanced, origin, scale, token).ConfigureAwait(false);
+
+        async Task<ScreenLine[]> RefineGameTextAsync(ScreenLine[] filtered)
+        {
+            if (!paragraph || TextSelection.At(filtered, cursor, true, null) is not { } initial)
+                return filtered;
+
+            if (initial.Text.AsSpan().IndexOfAny('(', ')') >= 0
+                && await ReadWhiteChoiceAsync().ConfigureAwait(false) is { } sharperChoice)
+                return sharperChoice;
+
+            // A single-color mask can erase emphasized words on an otherwise dark text panel.
+            if (!HasMixedBrightText(original, local))
+                return filtered;
+
+            var raw = await RecognizeBitmapAsync(original, origin, scale, token).ConfigureAwait(false);
+            return TextSelection.At(raw, cursor, true, null) is { } candidate
+                && TextSelection.RestoresParagraphWords(candidate, initial, raw) ? raw : filtered;
+        }
+
+        async Task<ScreenLine[]?> ReadWhiteChoiceAsync()
+        {
+            if (!HasNearWhiteTextOnDarkBackground(SampleLuminance(original, local)))
+                return null;
+
+            const int whiteCutoff = 245;
+            using var whiteText = LightTextMask(original, whiteCutoff, token);
+            var rows = await RecognizeBitmapAsync(whiteText, origin, scale, token).ConfigureAwait(false);
+            // Exclude the dimmer border only when the alternative contains one complete choice.
+            return TextSelection.At(rows, cursor, true, null)?.Text is { Length: > 2 } text
+                && text[0] == '(' && text[^1] == ')' && text.AsSpan(1, text.Length - 2).IndexOfAny('(', ')') < 0
+                ? rows : null;
+        }
     }
 
     private static bool IsUppercaseWord(string text) => text.Count(char.IsAsciiLetterUpper) >= 2
@@ -476,6 +511,12 @@ internal sealed partial class ScreenOcr : IDisposable
         return light * 3 >= samples * 2 && dark * 10 >= samples;
     }
 
+    private static bool HasNearWhiteTextOnDarkBackground(int[] luminance)
+    {
+        var samples = luminance.Sum();
+        return luminance.Skip(245).Sum() * 100 >= samples * 6 && luminance.Take(150).Sum() * 4 >= samples;
+    }
+
     internal static bool IsHan(char letter) => letter is >= '\u3400' and <= '\u4DBF' or >= '\u4E00' and <= '\u9FFF'
         or >= '\uF900' and <= '\uFAFF';
 
@@ -642,6 +683,42 @@ internal sealed partial class ScreenOcr : IDisposable
             return line;
         var bounds = words.Skip(1).Select(word => word.Bounds).Aggregate(RectangleF.Union);
         return line with { Words = [words[0], new ScreenWord(numeral, bounds)] };
+    }
+
+    private static unsafe bool HasMixedBrightText(Bitmap bitmap, Point cursor)
+    {
+        const int step = 4;
+        var samples = (bitmap.Width + step - 1) / step;
+        var top = Math.Max(0, cursor.Y - 120);
+        var bottom = Math.Min(bitmap.Height, cursor.Y + 120);
+        var data = bitmap.LockBits(new Rectangle(Point.Empty, bitmap.Size), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            for (var y = top; y < bottom; y += step)
+            {
+                var row = (byte*)data.Scan0 + y * data.Stride;
+                var dark = 0;
+                var pale = 0;
+                var colored = 0;
+                for (var x = 0; x < bitmap.Width; x += step)
+                {
+                    var pixel = row + x * 4;
+                    int red = pixel[2], green = pixel[1], blue = pixel[0];
+                    var luma = Luminance(red, green, blue);
+                    var spread = Math.Max(red, Math.Max(green, blue)) - Math.Min(red, Math.Min(green, blue));
+                    if (luma < 120)
+                        dark++;
+                    else if (luma >= 185 && spread <= 37)
+                        pale++;
+                    else if (luma >= 155 && spread >= 58)
+                        colored++;
+                }
+                if (dark * 2 >= samples && colored >= Math.Max(4, samples / 100) && pale >= colored * 2)
+                    return true;
+            }
+            return false;
+        }
+        finally { bitmap.UnlockBits(data); }
     }
 
     private static int? LightLetteringCutoff(Bitmap bitmap, Point cursor)
@@ -1034,6 +1111,28 @@ internal static partial class TextSelection
         IncludesParagraph(candidate.Bounds, initial.Bounds)
         && IncludesParagraph(initial.Bounds, candidate.Bounds)
         && candidate.Text.Count(char.IsLetterOrDigit) >= initial.Text.Count(char.IsLetterOrDigit) * 0.96f;
+
+    internal static bool RestoresParagraphWords(Selection candidate, Selection initial, ScreenLine[] rawLines)
+    {
+        if (!IncludesParagraph(candidate.Bounds, initial.Bounds))
+            return false;
+
+        // Require added words on the original lines. A nearby title or column is not evidence of missing text.
+        var sameRows = rawLines.Where(line => line.Bounds.IntersectsWith(initial.Bounds)
+                && line.Bounds.Top + line.Bounds.Height / 2 >= initial.Bounds.Top
+                && line.Bounds.Top + line.Bounds.Height / 2 <= initial.Bounds.Bottom)
+            .OrderBy(line => line.Bounds.Top).ThenBy(line => line.Bounds.Left);
+        var before = EnglishWord().Matches(initial.Text);
+        var after = EnglishWord().Matches(string.Join(' ', sameRows.Select(line => line.Text)));
+        if (before.Count < 3 || after.Count <= before.Count)
+            return false;
+
+        var index = 0;
+        foreach (Match word in after)
+            if (word.Value.Equals(before[index].Value, StringComparison.OrdinalIgnoreCase) && ++index == before.Count)
+                return true;
+        return false;
+    }
 
     private static ScreenLine? LinkedNeighbor(ScreenLine[] lines, ScreenLine line, bool below)
     {

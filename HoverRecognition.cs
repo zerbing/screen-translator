@@ -5,7 +5,7 @@ namespace ScreenTranslator;
 internal static class HoverRecognition
 {
     internal delegate Task<ScreenLine[]> ReadRegion(Rectangle area, float scale, Point cursor,
-        Func<ScreenLine[], bool>? hasTarget, CancellationToken token, bool allowMixedText, bool largeDisplayOnly);
+        Func<ScreenLine[], bool>? hasTarget, CancellationToken token, bool allowMixedText, bool largeDisplayOnly, bool paragraph);
 
     public static async Task<(Selection? Target, Selection? Word)> ReadAsync(Rectangle available,
         Rectangle capture, Rectangle wider, Point cursor, bool paragraph, bool useGamePreprocessing,
@@ -73,7 +73,7 @@ internal static class HoverRecognition
             var scale = Math.Min(preferredScale, (float)OcrEngine.MaxImageDimension / Math.Max(area.Width, area.Height));
             return readRegion(area, scale, cursor,
                 useGamePreprocessing && preprocess ? recognized => Select(recognized) is not null : null,
-                token, !useGamePreprocessing && !paragraph, largeDisplayOnly);
+                token, !useGamePreprocessing && !paragraph, largeDisplayOnly, paragraph);
         }
     }
 
