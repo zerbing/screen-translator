@@ -20,6 +20,7 @@
     <EmbeddedResource Include="Dictionaries/ECDICT.zip" LogicalName="ScreenTranslator.Dictionaries.ECDICT.zip" />
     <EmbeddedResource Include="Dictionaries/ECDICT-Frequencies.tsv.gz" LogicalName="ScreenTranslator.Dictionaries.ECDICT-Frequencies.tsv.gz" />
     <EmbeddedResource Include="Dictionaries/ECDICT-LICENSE.txt" LogicalName="ScreenTranslator.Dictionaries.ECDICT-LICENSE.txt" />
+    <EmbeddedResource Include="scripts/Install-Environment.ps1" LogicalName="ScreenTranslator.Install-Environment.ps1" />
     <Compile Remove="tests/**/*.cs" />
     <InternalsVisibleTo Include="ScreenTranslator.Regression" />
   </ItemGroup>

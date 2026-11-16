@@ -5,8 +5,15 @@ namespace ScreenTranslator;
 internal static class Program
 {
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
+        if (args.Contains("--check-environment", StringComparer.Ordinal))
+        {
+            Environment.ExitCode = args.Length == 2 && args[0] == "--check-environment"
+                ? StartupEnvironment.WriteStatus(args[1]) : 1;
+            return;
+        }
+
         ApplicationConfiguration.Initialize();
         using var instance = new Mutex(false, @"Local\ScreenTranslator.Hover");
         if (!TakeOwnershipOrActivate(instance))
@@ -14,6 +21,9 @@ internal static class Program
 
         try
         {
+            if (!StartupEnvironment.EnsureReady())
+                return;
+
             using var app = new TranslatorApp();
             using var activation = new ActivationWindow(app.ShowMainWindow);
             app.ShowMainWindow();

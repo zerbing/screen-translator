@@ -2,6 +2,12 @@
 
 使用 Windows 英文 OCR 语言包与 .NET 8 SDK，构建时会复制仓库中的离线 OCR 模型和本地库。从项目根目录运行 `dotnet run -c Release --project tests/ScreenTranslator.Regression.csproj`。任一断言失败或缺少样本时，测试会以非零状态退出。
 
+启动环境的检测与确认流程可以独立测试：`dotnet run -c Release --project tests/ScreenTranslator.Regression.csproj -- --environment-only`。这组测试不需要 OCR 语言包或截图，不请求管理员权限、不安装组件。发布后的 `ScreenTranslator.exe --check-environment report.json` 只将缺失组件写入指定 JSON 文件，不弹窗、不安装；退出码 `0` 表示环境完整，`2` 表示存在缺失项，`1` 表示检测失败。
+
+安装脚本测试：`powershell -NoProfile -ExecutionPolicy Bypass -File tests/Install-Environment.Tests.ps1`。测试使用替身验证基础组件的安装顺序、跳过已安装组件、只安装请求项、失败处理与重启提示，以及 WSUS 重试的单独确认、失败后恢复配置和拒绝覆盖明确的限制。不会下载或安装组件，也不修改真实注册表或更新策略。
+
+这组测试还验证 WSUS 确认发生在首次安装之前、真实进度的读取和主程序退出后的取消。异步监控使用只输出测试进度或等待的 PowerShell 管道验证，不调用真实的系统安装命令。
+
 截图存放在本机 `%LOCALAPPDATA%\ScreenTranslatorDev\ocr-fixtures`。鼠标坐标和预期英文文本记录在 `Program.cs`。游戏截图在原始 3840×2160 及缩放后的 1920×1080 各跑一次。
 
 在命令末尾加上 `-- --zoom-matrix`，可将所有现有截图用例统一跑在 175%、150%、125%、100%、75% 和 50% 六档，包括图片窗口中的缩放场景。运行结束后分别报告每档通过的断言数。默认运行仍使用各用例原有的缩放比例和断言。

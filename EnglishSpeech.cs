@@ -10,6 +10,22 @@ internal sealed class EnglishSpeech : IDisposable
     private const int PlainText = 16;
     private object? voice;
 
+    internal static bool IsAvailable()
+    {
+        try
+        {
+            var speaker = CreateEnglishVoice();
+            if (speaker is null)
+                return false;
+            Marshal.ReleaseComObject(speaker);
+            return true;
+        }
+        catch (Exception error) when (error is COMException or RuntimeBinderException)
+        {
+            return false;
+        }
+    }
+
     public bool Speak(string text)
     {
         try

@@ -4,6 +4,9 @@ using System.Text.Json;
 using ScreenTranslator;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
+if (args.Contains("--environment-only", StringComparer.Ordinal))
+    return EnvironmentTests.Run();
+EnvironmentTests.Run();
 var zoomMatrix = args.Contains("--zoom-matrix", StringComparer.Ordinal);
 double[] requiredZooms = [1.75, 1.5, 1.25, 1.0, 0.75, 0.5];
 var fixtureRoot = args.FirstOrDefault(arg => arg != "--zoom-matrix") ?? Path.Combine(
