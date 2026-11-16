@@ -15,13 +15,7 @@ Windows 屏幕英中翻译工具，适合玩游戏或使用英文软件时随手
 
 解压完整程序包后运行 `ScreenTranslator.exe`，保留同目录的 `OcrModels` 和 `x64` 文件夹。需要 Windows 10 2004 或更新版本（x64）、.NET 8 Desktop Runtime、Windows 英文 OCR 语言包及 Visual C++ x64 运行库。朗读需要 Windows 英语语音包。[下载程序](https://github.com/zerbing/screen-translator/releases/latest) · [.NET 8 下载](https://dotnet.microsoft.com/download/dotnet/8.0) · [Visual C++ x64 运行库](https://aka.ms/vs/17/release/vc_redist.x64.exe) · [安装英文 OCR](https://learn.microsoft.com/zh-cn/windows/powertoys/text-extractor)
 
-启动时会检查英文 OCR、简体中文 OCR（用于中英混排）、英语朗读语音和 Visual C++ x64 运行库。发现缺失项后会列出清单，只有点击“是”并同意 Windows 管理员权限提示后才开始安装；点击“否”或取消权限提示会退出，不安装组件。语言包通过 Windows Update 安装，并先补齐对应的基础语言组件；VC++ 安装包来自 Microsoft，执行前校验数字签名。安装完成会重新检查，环境就绪后自动打开主界面。需要重启时会提示，不会自动重启电脑。安装日志位于 `%PROGRAMDATA%\ScreenTranslator\Logs`。
-
-发布包不包含 .NET 运行时。若缺少 .NET 8 Desktop Runtime（x64），双击程序时会由 .NET 启动器提示前往下载安装；安装后再次打开程序即可。
-
-安装语言包前如果检测到企业 WSUS 更新源，会先询问是否仅本次从 Microsoft Windows Update 下载语言组件，避免先在企业源上长时间等待。其他来源安装返回 `0x800f0954` 时也会提供此选项。同意后临时调整“可选组件”的来源，安装完成或报错后恢复，常规 Windows 更新来源保持不变。如果系统有明确禁止直连或指定更新类别来源的策略，程序会提示联系管理员，不覆盖这些限制。[微软对 WSUS 和语言包的说明](https://learn.microsoft.com/en-us/windows/deployment/update/fod-and-lang-packs)。
-
-安装窗口显示 Windows 实际报告的进度。可以按 Ctrl+C 请求取消；退出主程序也会请求取消。Windows 若暂时无法取消当前操作，程序会等待其安全返回后恢复配置，不强制结束系统安装进程。同一时间只允许一个环境安装运行。
+启动时会自动检查运行环境，缺少 OCR 语言包、英语语音包或 Visual C++ 运行库时，经用户确认后安装。
 
 | 操作 | 默认用法 |
 | --- | --- |

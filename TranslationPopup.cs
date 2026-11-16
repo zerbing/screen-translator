@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using System.Runtime.InteropServices;
 
 namespace ScreenTranslator;
@@ -12,6 +13,7 @@ internal sealed class TranslationPopup : Form
     private readonly Font bodyFont = new("Microsoft YaHei UI", 11, FontStyle.Regular);
     private readonly Font subFont = new("Microsoft YaHei UI", 9, FontStyle.Regular);
     private string english = "";
+    private string displayedEnglish = "";
     private string chinese = "";
     private string? source;
     private (string Word, string Phonetic)? pronunciation;
@@ -84,6 +86,7 @@ internal sealed class TranslationPopup : Form
         var captionLimit = english.Contains('\n') ? Math.Max(normalCaptionHeight, screen.Height / 3) : normalCaptionHeight;
         var captionHeight = Math.Min(caption.Height, captionLimit);
         englishArea = new Rectangle(pad, pad, width - 2 * pad, captionHeight);
+        displayedEnglish = FitEnglishCaption(graphics, english, subFont, englishArea.Size);
         var phoneticTop = english.Length == 0 ? pad : englishArea.Bottom + pad / 3;
         pronunciationArea = new Rectangle(pad, phoneticTop, width - 2 * pad, phonetic.Height);
         var headerBottom = pronunciationText.Length > 0 ? pronunciationArea.Bottom : englishArea.Bottom;
@@ -137,13 +140,40 @@ internal sealed class TranslationPopup : Form
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         e.Graphics.DrawPath(border, shape);
         if (english.Length > 0)
-            TextRenderer.DrawText(e.Graphics, english, subFont, englishArea, Secondary, TextFlags | TextFormatFlags.EndEllipsis);
+            TextRenderer.DrawText(e.Graphics, displayedEnglish, subFont, englishArea, Secondary, TextFlags | TextFormatFlags.EndEllipsis);
         if (pronunciationText.Length > 0)
             TextRenderer.DrawText(e.Graphics, pronunciationText, subFont, pronunciationArea, Secondary, TextFlags);
         if (chinese.Length > 0)
             TextRenderer.DrawText(e.Graphics, chinese, bodyFont, chineseArea, Foreground, TextFlags | TextFormatFlags.EndEllipsis);
         if (source is not null)
             TextRenderer.DrawText(e.Graphics, source, subFont, sourceArea, Color.FromArgb(136, 209, 194), TextFlags);
+    }
+
+    private static string FitEnglishCaption(IDeviceContext context, string text, Font font, Size area)
+    {
+        bool Fits(string value)
+        {
+            var measured = TextRenderer.MeasureText(context, value, font,
+                new Size(area.Width, int.MaxValue), TextFlags);
+            return measured.Width <= area.Width && measured.Height <= area.Height;
+        }
+
+        if (Fits(text))
+            return text;
+
+        var characters = StringInfo.ParseCombiningCharacters(text);
+        string WithEllipsis(int count) => text[..(count == characters.Length ? text.Length : characters[count])].TrimEnd() + "...";
+        var low = 0;
+        var high = characters.Length;
+        while (low < high)
+        {
+            var middle = low + (high - low + 1) / 2;
+            if (Fits(WithEllipsis(middle)))
+                low = middle;
+            else
+                high = middle - 1;
+        }
+        return WithEllipsis(low);
     }
 
     private static GraphicsPath RoundedRect(Size size, int diameter)
