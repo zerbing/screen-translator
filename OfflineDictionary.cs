@@ -10,6 +10,7 @@ internal sealed partial class OfflineDictionary : IDisposable
     public const string Source = "ECDICT · 离线";
 
     private readonly object archiveLock = new();
+    private readonly Dictionary<string, Entry?> lookups = new(StringComparer.Ordinal);
     private static readonly Lazy<Dictionary<string, int>> Frequencies = new(LoadFrequencies);
     private readonly Lazy<ZipArchive> archive = new(() => new ZipArchive(
         typeof(OfflineDictionary).Assembly.GetManifestResourceStream("ScreenTranslator.Dictionaries.ECDICT.zip")
@@ -64,9 +65,11 @@ internal sealed partial class OfflineDictionary : IDisposable
         var prefix = folded[..Math.Min(2, folded.Length)];
         lock (archiveLock)
         {
+            if (lookups.TryGetValue(word, out var cached))
+                return cached;
             var entry = archive.Value.GetEntry(prefix);
             if (entry is null)
-                return null;
+                return Remember(null);
 
             using var reader = new StreamReader(entry.Open());
             Entry? fallback = null;
@@ -82,11 +85,18 @@ internal sealed partial class OfflineDictionary : IDisposable
                 var definition = line[(phoneticEnd + 1)..].Replace('\t', '\n');
                 var match = new Entry(definition, phonetic.Length == 0 ? null : phonetic, key.ToString());
                 if (key.SequenceEqual(word))
-                    return match;
+                    return Remember(match);
                 if (fallback is null || key.SequenceEqual(folded))
                     fallback = match;
             }
-            return fallback;
+            return Remember(fallback);
+        }
+
+        Entry? Remember(Entry? value)
+        {
+            if (lookups.Count >= 8192) lookups.Clear();
+            lookups[word] = value;
+            return value;
         }
     }
 
@@ -96,6 +106,7 @@ internal sealed partial class OfflineDictionary : IDisposable
     {
         lock (archiveLock)
         {
+            lookups.Clear();
             if (archive.IsValueCreated)
                 archive.Value.Dispose();
         }

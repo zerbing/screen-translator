@@ -12,8 +12,22 @@
 
 在命令末尾加上 `-- --zoom-matrix`，可将所有现有截图用例统一跑在 175%、150%、125%、100%、75% 和 50% 六档，包括图片窗口中的缩放场景。运行结束后分别报告每档通过的断言数。默认运行仍使用各用例原有的缩放比例和断言。
 
+加上 `-- --progress` 可逐项输出累计检查、通过和失败数量，便于查看长回归的运行进度；可与 `--zoom-matrix` 一起使用。
+
+加上 `-- --timings` 可记录每个识别场景的耗时，用于比较性能优化前后的结果。耗时记录不改变识别流程，也不设置超时或截断识别。
+
+性能比较同时覆盖裁剪原图及 1920×1080、3840×2160 完整画布中的列表。从不同条目和续行悬停，检查所有条目的文字及项目符号；不得用裁剪图耗时代替整屏场景。像素缓冲区测试另外验证 BGRA、带填充的正负步长，以及取消后重新读取不遗留图像锁。
+
+本地补读还会比较直接传入的像素和旧 PNG 路径解码后的像素及 DPI，确保省去编码、解码时不改变模型输入。批量读取测试确定性地在准备图像期间取消，再用同一个识别器读取完整文字，验证取消与资源复用。
+
 | 文件 | 回归场景 |
 | --- | --- |
+| `web-learning-list.png`、`web-schema-steps.png` | 项目列表和编号列表保留条目换行；同一行的粗体、普通字体及项内软换行完整选中 |
+| `web-rule-semantics-overlay.png` | 首项的括号、后半句和续行完整选中，邻近浮窗遮挡的条目不混入 |
+| `web-factory-list.png` | 原图的五个项目保持五项，从条目内部续行悬停也选中同一列表，续行不得凭行距新增项目符号 |
+| `jar-table.png`、`jar-table-overlay.png` | 逐行检查两列的标识符、文件名和版本号；单词与段落模式均以鼠标所在单元格为范围 |
+| `abyss-challenge-list.png` | 标题与三条条件分别换行，条件内软换行合并；从标题、各条件和行尾查词 |
+| `wavebinder-description.png`、`wavebinder-reactions.png` | 同一段落包含多种字色，从首行、中间和末行触发均须读全，强调文字不使段落截断 |
 | `disturbance-outbreak.png` | 金色活动标题和倒计时分别完整识别，标题不丢失开头，也不与下一行串选 |
 | `genshin-guild-greeting.png` | 冒险家协会两行欢迎语完整识别，与上方人物名分离；固定问候语采用原神译法 |
 | `pale-crown-palace.png`、`pale-crown-palace-context.png`、`teplo-oasis.png` | 浅色地图和图标背景上的地名完整识别，覆盖有无翻译浮窗的截图 |
@@ -38,7 +52,7 @@
 | `mixed-text.png` | 从紧贴汉字的文本中取出完整的 hatch-pet |
 | `mixed-terminal-hyphen.png` | 深色终端中英混排，鼠标停在 sites-remix 的不同字母上都能读出完整词 |
 | `terminal-command-list.png`、`terminal-command-list-bracket.png` | 从命令列和说明列均可选中同一组条目，命令斜杠和条目换行保留 |
-| `terminal-status-header.png` | 标题、路径和字段分处独立行，分别保留换行 |
+| `terminal-status-header.png` | 标题及同一行可见的灰色版本号完整保留，路径和字段分别换行 |
 | `mixed-sidebar.png` | 在多行中英混排侧栏里从单词的不同位置查 Markdown、codex 和 WSL，并确保相邻的 chdir 能独立选中 |
 | `mixed-sidebar-codex.png` | 不同缩放下查 Codex、codex 和 Markdown，覆盖大小写及紧贴汉字的词尾 |
 | `mixed-filename.png` | 从中文说明中区分 ScreenTranslator 与 exe，并修正文件名中的 OCR 易混字符 |
@@ -52,6 +66,8 @@
 | `league-scoreboard.png` | 查彩色队标和白色缩写，覆盖缩放及相邻编号导致的误读 |
 
 程序另外生成深色斜体和金色斜体样本，并验证 `in`、`in front of`、各应用词库及缓存隔离。
+
+程序还生成六组深浅背景与不同强调字色的多行段落，以及使用不同边框颜色、大小写标识符和文件名的表格。生成样本不依赖用户截图内容，用于检查换色、缩放和悬停位置变化后的行为。测试源码中的预期文本只用于断言，不提供给识别器。
 
 默认运行时，桌面图标和中英混排截图按各用例原有尺寸测试；`--zoom-matrix` 同样覆盖六档。中英混排用例需要安装 Windows 简体中文 OCR 语言包。
 

@@ -161,6 +161,13 @@ internal sealed class TranslatorApp : ApplicationContext
         var isDesktop = targetIsDesktop;
         try
         {
+            if (readParagraph) popup.Dismiss();
+            using var frame = readParagraph
+                ? await Task.Run(() => recognizer.CaptureFrame(available, request.Token), request.Token)
+                : null;
+            if (!StillHovering(request, window, cursor, readParagraph)) return;
+            if (readParagraph)
+                popup.Present("", "正在识别…", null, RectangleF.Empty, cursor, window);
             var wider = readParagraph ? capture : HoverRecognition.CaptureArea(available, cursor, dpi, paragraph: false, expanded: true);
             var (target, word, glossary) = await Task.Run(async () =>
             {
@@ -168,7 +175,9 @@ internal sealed class TranslatorApp : ApplicationContext
                 if (isDesktop && DesktopLabels.TryRead(cursor, out var desktopLabel))
                     return (desktopLabel, desktopLabel, activeGlossary);
                 var result = await HoverRecognition.ReadAsync(available, capture, wider, cursor, readParagraph,
-                    isGenshin, activeGlossary, recognizer.ReadAsync, request.Token, recognizer.ReadOptionAsync).ConfigureAwait(false);
+                    isGenshin, activeGlossary, frame is null ? recognizer.ReadAsync : frame.ReadAsync, request.Token,
+                    frame is null ? recognizer.ReadOptionAsync : frame.ReadOptionAsync,
+                    frame is null ? null : frame.ReadLayoutAsync).ConfigureAwait(false);
                 return (result.Target, result.Word, activeGlossary);
             }, request.Token);
             if (!StillHovering(request, window, cursor, readParagraph))
@@ -182,7 +191,11 @@ internal sealed class TranslatorApp : ApplicationContext
             }
 
             if (target is null)
+            {
+                if (readParagraph)
+                    popup.Present("", "未识别到文字", null, RectangleF.Empty, cursor, window);
                 return;
+            }
             if (glossary is not null)
                 target = target with { Text = glossary.CorrectOcr(target.Text), Context = glossary.CorrectOcr(target.Context) };
 

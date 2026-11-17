@@ -428,8 +428,7 @@ internal sealed partial class ScreenOcr
         var sample = Rectangle.Intersect(new Rectangle(Point.Empty, image.Size),
             new Rectangle(local.X - 48, local.Y - 26, 97, 53));
         var dark = 0;
-        var red = 0;
-        var cyan = 0;
+        var colored = 0;
         var neutral = 0;
         var samples = 0;
         var saturated = new Dictionary<int, int>();
@@ -440,11 +439,8 @@ internal sealed partial class ScreenOcr
                 var ceiling = Math.Max(pixel.R, Math.Max(pixel.G, pixel.B));
                 if (ceiling < 70)
                     dark++;
-                if (pixel.R - Math.Max(pixel.G, pixel.B) > 48)
-                    red++;
-                if (Math.Min(pixel.G, pixel.B) - pixel.R > 48)
-                    cyan++;
                 var floor = Math.Min(pixel.R, Math.Min(pixel.G, pixel.B));
+                if (ceiling - floor >= 48) colored++;
                 if (floor >= 150 && ceiling - floor <= 45)
                     neutral++;
                 if (ceiling >= 130 && ceiling - floor >= 75)
@@ -461,8 +457,8 @@ internal sealed partial class ScreenOcr
         {
             // A large colored glyph can fill the probe. It still needs the colored-letter
             // path when there is no white lettering characteristic of a flat logo.
-            if (!largeDisplayOnly && neutral * 100 < samples * 14 && Math.Max(red, cyan) * 100 >= samples * 12)
-                return await ReadColoredOverlayAsync(image, origin, local, cursor, red > cyan, token).ConfigureAwait(false);
+            if (!largeDisplayOnly && neutral * 100 < samples * 14 && colored * 100 >= samples * 12)
+                return await ReadColoredOverlayAsync(image, origin, local, cursor, token).ConfigureAwait(false);
             if (saturated.Count == 0 || neutral * 100 < samples * 14)
                 return null;
             var fill = saturated.MaxBy(pair => pair.Value);
@@ -472,9 +468,9 @@ internal sealed partial class ScreenOcr
         }
         if (largeDisplayOnly)
             return null;
-        if (Math.Max(red, cyan) * 100 >= samples * 12)
+        if (colored * 100 >= samples * 12)
         {
-            var color = await ReadColoredOverlayAsync(image, origin, local, cursor, red > cyan, token).ConfigureAwait(false);
+            var color = await ReadColoredOverlayAsync(image, origin, local, cursor, token).ConfigureAwait(false);
             if (color is not null)
                 return color;
         }
@@ -575,22 +571,45 @@ internal sealed partial class ScreenOcr
     }
 
     private async Task<ScreenLine[]?> ReadColoredOverlayAsync(Bitmap image, Point origin, Point local, Point cursor,
-        bool red, CancellationToken token)
+        CancellationToken token)
     {
+        var hues = new int[24];
+        for (var y = Math.Max(0, local.Y - 26); y < Math.Min(image.Height, local.Y + 27); y += 2)
+            for (var x = Math.Max(0, local.X - 48); x < Math.Min(image.Width, local.X + 49); x += 2)
+            {
+                var pixel = image.GetPixel(x, y);
+                if (Math.Max(pixel.R, Math.Max(pixel.G, pixel.B)) >= 100 && Chroma(pixel) >= .25f)
+                    hues[(int)(pixel.GetHue() / 15) % hues.Length]++;
+            }
+        foreach (var hue in Enumerable.Range(0, hues.Length).Where(index => hues[index] >= 6).OrderByDescending(index => hues[index]).Take(3))
+            if (await ReadForegroundOverlayAsync(image, origin, local, cursor, hue * 15 + 7.5f, token).ConfigureAwait(false) is { } rows)
+                return rows;
+        return null;
+    }
+
+    private async Task<ScreenLine[]?> ReadForegroundOverlayAsync(Bitmap image, Point origin, Point local, Point cursor,
+        float hue, CancellationToken token)
+    {
+        bool Matches(byte r, byte g, byte b, float tolerance)
+        {
+            var difference = Math.Abs(Color.FromArgb(r, g, b).GetHue() - hue);
+            return Math.Max(r, Math.Max(g, b)) >= 100 && Math.Max(r, Math.Max(g, b)) - Math.Min(r, Math.Min(g, b)) >= 25
+                && Math.Min(difference, 360 - difference) <= tolerance;
+        }
         var patch = Rectangle.Intersect(new Rectangle(Point.Empty, image.Size),
             new Rectangle(local.X - 160, local.Y - 112, 321, 225));
         using var crop = image.Clone(patch, PixelFormat.Format32bppArgb);
         using var mask = ConvertPixels(crop, token, (r, g, b) =>
-            (red ? r - Math.Max(g, b) : Math.Min(g, b) - r) >= 45 ? (byte)255 : (byte)0);
+            Matches(r, g, b, 26) ? (byte)255 : (byte)0);
         var relative = new Point(local.X - patch.X, local.Y - patch.Y);
         if (FindDisplayLine(mask, relative, maxHeight: 105) is not { } line || line.Width > 260)
             return null;
 
         line = Rectangle.Intersect(new Rectangle(Point.Empty, crop.Size), Rectangle.Inflate(line, 2, 4));
         using var lettering = crop.Clone(line, PixelFormat.Format32bppArgb);
-        using var channel = ConvertPixels(lettering, token, (r, _, b) => red ? r : b);
+        using var channel = ConvertPixels(lettering, token, (r, g, b) => Math.Max(r, Math.Max(g, b)));
         using var isolated = ConvertPixels(lettering, token, (r, g, b) =>
-            (red ? r - Math.Max(g, b) : Math.Min(g, b) - r) >= 96 ? (byte)255 : (byte)0);
+            Matches(r, g, b, 15) ? (byte)255 : (byte)0);
         var start = new Point(origin.X + patch.X + line.X, origin.Y + patch.Y + line.Y);
         foreach (var (variant, height, aspect) in new[] { (isolated, 25, 1.6f), (channel, 25, 1.6f),
                      (channel, 38, 1.6f), (channel, 39, 1.35f) })

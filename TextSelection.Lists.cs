@@ -48,8 +48,17 @@ internal static partial class TextSelection
 
     private static Selection? ListAt(ScreenLine[] lines, Point cursor)
     {
-        var rows = lines.Select(line => ReadListRow(line, lines)).OfType<ListRow>()
-            .OrderBy(row => row.Bounds.Top).ToArray();
+        var markers = lines.Where(line => line.Words.Length >= 3 && line.Words[0].Text.Length <= 2
+            && line.Words[0].Bounds.Width <= line.Bounds.Height * 1.1f
+            && (!line.Words[0].Text.Any(char.IsLetterOrDigit) || line.Words[0].Bounds.Height <= line.Bounds.Height * .6f)
+            && line.Words[1].Bounds.Left - line.Words[0].Bounds.Right >= line.Bounds.Height * .2f).ToArray();
+        lines = lines.Select(line => markers.Contains(line) && markers.Count(other =>
+                Math.Abs(other.Bounds.Left - line.Bounds.Left) <= line.Bounds.Height * .4f
+                && Math.Abs(other.Words[1].Bounds.Left - line.Words[1].Bounds.Left) <= line.Bounds.Height * .4f) >= 3
+            ? line with { Words = line.Words.Select((word, index) => index == 0 ? word with { Text = "•" } : word).ToArray() }
+            : line).ToArray();
+        var detected = lines.Select(line => ReadListRow(line, lines)).OfType<ListRow>().ToArray();
+        var rows = detected.OrderBy(row => row.Bounds.Top).ToArray();
         var hovered = rows.MinBy(row => Distance(row.Bounds, cursor, 12, row.LineHeight * 2f));
         if (hovered is null || !float.IsFinite(Distance(hovered.Bounds, cursor, 12, hovered.LineHeight * 2f)))
             return null;
@@ -63,7 +72,8 @@ internal static partial class TextSelection
         while (end < aligned.Length && Adjacent(aligned[end - 1], aligned[end]))
             end++;
         var group = aligned[start..end];
-        if (group.Length < 2 || hovered.Kind == ListKind.Command && group.Count(row => row.ReadSlash) < 2)
+        if (group.Length < 2 && hovered.Kind != ListKind.Bullet
+            || hovered.Kind == ListKind.Command && group.Count(row => row.ReadSlash) < 2)
             return null;
 
         var bounds = group[0].Bounds;
@@ -73,20 +83,24 @@ internal static partial class TextSelection
         {
             var row = group[i];
             var body = row.Body;
-            if (body.Length > 0 && i + 1 < group.Length)
+            if (body.Length > 0)
             {
-                var next = group[i + 1];
+                var limit = i + 1 < group.Length ? group[i + 1].Bounds.Top : float.PositiveInfinity;
                 var continuation = lines.Where(line => line.Bounds.Top >= row.Bounds.Bottom - row.LineHeight * .1f
-                    && line.Bounds.Bottom <= next.Bounds.Top + row.LineHeight * .1f
-                    && Math.Abs(line.Bounds.Left - row.BodyLeft) <= row.LineHeight * .4f
+                    && line.Bounds.Bottom <= limit + row.LineHeight * .1f
+                    && Math.Abs(line.Bounds.Left - row.BodyLeft) <= row.LineHeight * .6f
                     && line.Text.Any(char.IsLetter)
                     && !CommandRow().IsMatch(line.Text) && !MarkedRow().IsMatch(line.Text) && !FieldRow().IsMatch(line.Text))
                     .OrderBy(line => line.Bounds.Top);
+                var previousBottom = row.Bounds.Bottom;
                 foreach (var line in continuation)
                 {
+                    if (line.Bounds.Top - previousBottom > Math.Max(line.Bounds.Height, row.LineHeight) * .95f)
+                        break;
                     body += " " + line.Text;
                     bounds = RectangleF.Union(bounds, line.Bounds);
                     containsCursor |= float.IsFinite(Distance(line.Bounds, cursor, 12, row.LineHeight * .45f));
+                    previousBottom = line.Bounds.Bottom;
                 }
             }
             items.Add(body.Length == 0 ? row.Prefix : row.Prefix + (row.Kind == ListKind.Command ? " - " : " ") + body);
@@ -97,11 +111,24 @@ internal static partial class TextSelection
         var text = string.Join('\n', items);
         return new Selection(text, text, bounds);
 
-        static bool Adjacent(ListRow first, ListRow second)
+        bool Adjacent(ListRow first, ListRow second)
         {
             var height = Math.Max(first.LineHeight, second.LineHeight);
             var step = second.Bounds.Top - first.Bounds.Top;
-            return step >= height * .55f && step <= height * 3.5f;
+            if (step < height * .55f) return false;
+            if (step <= height * 3.5f) return true;
+            // Long wrapped items stay in the list through their actual continuation
+            // lines. Spacing alone is never evidence of an additional bullet.
+            var bottom = first.Bounds.Bottom;
+            foreach (var line in lines.Where(line => line.Bounds.Top >= first.Bounds.Bottom - height * .1f
+                    && line.Bounds.Bottom <= second.Bounds.Top + height * .1f
+                    && Math.Abs(line.Bounds.Left - first.BodyLeft) <= height * .6f
+                    && line.Text.Any(char.IsLetter)).OrderBy(line => line.Bounds.Top))
+            {
+                if (line.Bounds.Top - bottom > Math.Max(height, line.Bounds.Height) * .95f) return false;
+                bottom = Math.Max(bottom, line.Bounds.Bottom);
+            }
+            return second.Bounds.Top - bottom <= height * .95f;
         }
     }
 
@@ -137,6 +164,10 @@ internal static partial class TextSelection
                 bounds = RectangleF.Union(bounds, description.Bounds);
             }
         }
+        if (kind == ListKind.Bullet && lines.Any(other => other.Bounds.Left - bounds.Right > bounds.Height * 2
+            && Math.Abs(other.Bounds.Top + other.Bounds.Height / 2 - bounds.Top - bounds.Height / 2) <= bounds.Height * .35f
+            && other.Text.Any(char.IsLetter)))
+            return null;
         return new ListRow(kind, prefix, body, bounds, bodyLeft, bounds.Height, command.Groups["slash"].Value == "/");
     }
 }

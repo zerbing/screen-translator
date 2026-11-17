@@ -9,10 +9,11 @@ using Windows.Storage.Streams;
 
 namespace ScreenTranslator;
 
-internal sealed record ScreenWord(string Text, RectangleF Bounds);
+internal sealed record ScreenWord(string Text, RectangleF Bounds, float Confidence = float.NaN, float LetterConfidence = float.NaN);
 internal sealed record ScreenLine(ScreenWord[] Words, RectangleF Bounds)
 {
     public string Text => string.Join(' ', Words.Select(word => word.Text));
+    public bool CompleteCell { get; init; }
 }
 
 internal sealed partial class ScreenOcr : IDisposable
@@ -34,16 +35,18 @@ internal sealed partial class ScreenOcr : IDisposable
             latinOcr.Value.Dispose();
         if (mixedLatinOcr.IsValueCreated)
             mixedLatinOcr.Value.Dispose();
+        if (paragraphLatinEngines is not null)
+            foreach (var reader in paragraphLatinEngines.Skip(1)) reader.Dispose();
     }
 
     [GeneratedRegex(@"(?<=[A-Za-z])[•·](?=[sS]\b)")]
     private static partial Regex PossessiveDot();
 
-    [GeneratedRegex(@"\bScreenTrans[1Il]ator\s*[.．·]\s*exe(?:[oO0](?=\s|$))?(?![A-Za-z0-9])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex AppFileName();
+    [GeneratedRegex(@"\b[A-Za-z][A-Za-z0-9_-]*\s*[.．·]\s*(?:exe|dll)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ExecutableFileName();
 
-    internal static bool NeedsFileNameContext(string text) => text != "ScreenTranslator"
-        && AppFileName().IsMatch(text + ".exe");
+    internal static bool HasExecutableContext(ScreenLine[] rows, Point cursor) => rows.Any(row =>
+        ExecutableFileName().IsMatch(row.Text) && RectangleF.Inflate(row.Bounds, 12, 12).Contains(cursor));
 
     [GeneratedRegex(@"^[A-Za-z]{3,}/[A-Za-z]{3,}$", RegexOptions.CultureInvariant)]
     private static partial Regex SlashSeparatedWords();
@@ -119,10 +122,40 @@ internal sealed partial class ScreenOcr : IDisposable
         Point cursor = default, Func<ScreenLine[], bool>? hasTarget = null, CancellationToken token = default,
         bool allowMixedText = false, bool largeDisplayOnly = false, bool paragraph = false)
     {
+        if (hasTarget is null && !largeDisplayOnly && ReadCodeCell(original, origin, cursor, token) is { } code)
+            return code;
+        if (paragraph && hasTarget is null && !largeDisplayOnly)
+        {
+            var baseline = await ReadBitmapCoreAsync(original, origin, scale, cursor, hasTarget, token,
+                allowMixedText, largeDisplayOnly, paragraph).ConfigureAwait(false);
+            var paragraphRows = await ReadParagraphAsync(original, origin, cursor, scale, token,
+                alternateRows: baseline).ConfigureAwait(false);
+            return paragraphRows;
+        }
         var rows = await ReadBitmapCoreAsync(original, origin, scale, cursor, hasTarget, token,
             allowMixedText, largeDisplayOnly, paragraph).ConfigureAwait(false);
         if (!allowMixedText && !largeDisplayOnly && hasTarget is not null)
-            return RefineGameLatin(original, origin, cursor, rows, paragraph, token);
+        {
+            var label = IsolatedMapLabel(rows, cursor);
+            if (label is null && HasMapLabelContext(rows, cursor) && HasUncertainLabel(rows, cursor))
+                label = ReadMapLatin(original, origin, cursor, token, rows);
+            if (label is not null) rows = [label];
+            if (!paragraph) rows = RefineLatin(original, origin, cursor, rows, false, token);
+            if (!paragraph && TextSelection.At(rows, cursor, false, null) is { } word
+                && word.Text.Length >= 4 && !TextSelection.IsStructuredCode(word.Text)
+                && !GenshinMapLabels.IsKnownLabel(word.Text)
+                && !rows.Any(row => row.Bounds.IntersectsWith(word.Bounds) && GenshinMapLabels.IsKnownLabel(row.Text))
+                && (spelling.Find(word.Text) is null || spelling.FrequencyRank(word.Text) is 0 or > 15000))
+            {
+                var alternate = await ReadParagraphAsync(original, origin, cursor, scale, token, alternateRows: rows).ConfigureAwait(false);
+                alternate = RefineLatin(original, origin, cursor, alternate, false, token);
+                if (TextSelection.At(alternate, cursor, false, null) is { } observed
+                    && observed.Bounds.IntersectsWith(word.Bounds) && spelling.FrequencyRank(observed.Text) > 0
+                    && observed.Text.Length >= word.Text.Length * .6f && observed.Text.Length <= word.Text.Length * 2)
+                    rows = alternate;
+            }
+            return rows;
+        }
         if (!allowMixedText || largeDisplayOnly)
             return rows;
         if (ReadLocalMixedLine(original, origin, cursor, rows, token) is { } localMixed)
@@ -138,9 +171,8 @@ internal sealed partial class ScreenOcr : IDisposable
         var local = new Point(cursor.X - origin.X, cursor.Y - origin.Y);
         if (selected is null)
         {
-            foreach (var red in new[] { false, true })
-                if (await ReadColoredOverlayAsync(original, origin, local, cursor, red, token).ConfigureAwait(false) is { } colored)
-                    return colored;
+            if (await ReadColoredOverlayAsync(original, origin, local, cursor, token).ConfigureAwait(false) is { } colored)
+                return colored;
         }
         var refined = await ReadPaleLatinLineAsync(original, origin, local, cursor, token).ConfigureAwait(false);
         if (refined is not null && TextSelection.At(refined, cursor, false, null) is { } improved
@@ -151,16 +183,35 @@ internal sealed partial class ScreenOcr : IDisposable
 
     private async Task<ScreenLine[]> ReadBitmapCoreAsync(Bitmap original, Point origin, float scale,
         Point cursor, Func<ScreenLine[], bool>? hasTarget, CancellationToken token,
-        bool allowMixedText, bool largeDisplayOnly, bool paragraph)
+        bool allowMixedText, bool largeDisplayOnly, bool paragraph, ScreenLine[]? knownGameRows = null,
+        bool gameMapChecked = false)
     {
         var local = new Point(cursor.X - origin.X, cursor.Y - origin.Y);
         if (largeDisplayOnly)
             return await ReadDisplayLabelAsync(original, origin, local, cursor, null, token, largeDisplayOnly: true)
                 .ConfigureAwait(false) ?? [];
 
-        var largeMapLabels = paragraph ? original.Width > 3840 : original.Height > 230;
-        var mapScene = hasTarget is not null && (HasMapLabelColors(original, local)
-            || HasMapLabelColors(original, local, 64) || HasMapLabelColors(original, local, 128));
+        var rawGameScale = paragraph ? Math.Min(1.65f, (float)OcrEngine.MaxImageDimension / Math.Max(original.Width, original.Height)) : scale;
+        ScreenLine[]? rawGameRows = hasTarget is null ? null
+            : knownGameRows ?? await RecognizeBitmapAsync(original, origin, rawGameScale, token).ConfigureAwait(false);
+        var nearbyHeights = rawGameRows?.SelectMany(row => row.Words).Where(word => word.Text.Count(char.IsLetter) >= 3
+                && RectangleF.Inflate(word.Bounds, word.Bounds.Height * 2, word.Bounds.Height).Contains(cursor))
+            .Select(word => word.Bounds.Height).Order().ToArray() ?? [];
+        var largeMapLabels = nearbyHeights.Length != 0 && nearbyHeights[nearbyHeights.Length / 2] >= 48;
+        if (!gameMapChecked && rawGameRows is not null && IsolatedMapLabel(rawGameRows, cursor) is { } observedLabel)
+            return [observedLabel];
+        var canReadMap = !gameMapChecked && rawGameRows is not null && HasMapLabelContext(rawGameRows, cursor);
+        if (canReadMap && HasUncertainLabel(rawGameRows!, cursor)
+            && ReadMapLatin(original, origin, cursor, token, rawGameRows!) is { } confirmedLabel)
+            return [confirmedLabel];
+        var mapScene = canReadMap && rawGameRows!.Where(row => row.Words.Length <= 4)
+            .SelectMany(row => row.Words).Any(word =>
+            word.Bounds.Height is >= 8 and <= 180
+            && Math.Abs(word.Bounds.Top + word.Bounds.Height / 2 - cursor.Y) <= Math.Max(20, word.Bounds.Height * .8f)
+            && Regex.Matches(word.Text, @"[A-Za-z]{3,}").Any(match =>
+                (match.Length >= 4 || char.IsUpper(match.Value[0]))
+                && (GenshinMapLabels.IsLabelFragment(match.Value) || GenshinMapLabels.MightBeLabel(match.Value)
+                    || GenshinMapLabels.HasLabelPrefix(match.Value))));
         if (mapScene)
         {
             var radius = Math.Clamp(original.Width / 2, 330, largeMapLabels ? 1000 : 650);
@@ -182,10 +233,9 @@ internal sealed partial class ScreenOcr : IDisposable
                 label = GenshinMapLabels.At(raw, cursor);
                 if (label is null)
                 {
-                    var prompt = mapRows.Concat(raw).Where(line => line.Text.Contains("Thousand", StringComparison.OrdinalIgnoreCase)
-                        && line.Text.Contains("Wind", StringComparison.OrdinalIgnoreCase))
-                        .MinBy(line => Math.Abs(line.Bounds.Top - cursor.Y));
-                    if (prompt is not null)
+                    foreach (var prompt in mapRows.Concat(raw).Where(line => line.Text.Count(char.IsLetter) >= 4
+                        && RectangleF.Inflate(line.Bounds, 12, line.Bounds.Height * 2).Contains(cursor))
+                        .OrderBy(line => Math.Abs(line.Bounds.Top - cursor.Y)).Take(3))
                     {
                         var next = Rectangle.Intersect(new Rectangle(Point.Empty, muted.Size), Rectangle.FromLTRB(
                             (int)prompt.Bounds.Left - patchOrigin.X, (int)prompt.Bounds.Bottom - patchOrigin.Y + 3,
@@ -238,56 +288,30 @@ internal sealed partial class ScreenOcr : IDisposable
                         break;
                 }
             }
+            label ??= ReadMapLatin(patch, patchOrigin, cursor, token, [.. mapRows, .. rawGameRows!]);
             if (label is not null && hasTarget!([label]))
                 return [label];
         }
 
-        if (hasTarget is not null && HasGoldLettering(original, local)
-            && !HasMixedBrightText(original, local, verticalRadius: 12))
+        if (paragraph && hasTarget is not null)
         {
-            using var gold = ConvertPixels(original, token, (red, green, blue) =>
-                (byte)(255 - Math.Clamp((green - blue - 15) * 255 / 50, 0, 255)));
-            var rows = await RecognizeBitmapAsync(gold, origin, scale, token).ConfigureAwait(false);
-            if (hasTarget(rows))
-                return await RefineGameTextAsync(rows, gold).ConfigureAwait(false);
-        }
-
-        if (paragraph && hasTarget is not null && HasMixedBrightText(original, local, cyanOnly: true))
-        {
-            // Preserve saturated lettering alongside the pale text on the same lines.
-            using var mask = ConvertPixels(original, token, (red, green, blue) =>
-                IsPale(red, green, blue, 220, 28) || IsBrightCyan(red, green, blue) ? (byte)0 : (byte)255);
-            var rows = await RecognizeBitmapAsync(mask, origin, scale, token).ConfigureAwait(false);
-            if (TextSelection.At(rows, cursor, true, null) is { } candidate
-                && HasCyanEmphasis(original, origin, candidate.Bounds, rows))
-            {
-                if (candidate.Bounds.Height > 300)
-                {
-                    var detail = TextSelection.ParagraphDetailArea(new Rectangle(origin, mask.Size), candidate.Bounds);
-                    using var focused = mask.Clone(new Rectangle(detail.X - origin.X, detail.Y - origin.Y,
-                        detail.Width, detail.Height), PixelFormat.Format32bppArgb);
-                    var detailScale = Math.Min(.8f, (float)OcrEngine.MaxImageDimension / Math.Max(detail.Width, detail.Height));
-                    var refined = await RecognizeBitmapAsync(focused, detail.Location, detailScale, token).ConfigureAwait(false);
-                    if (TextSelection.At(refined, cursor, true, null) is { } reread
-                        && TextSelection.PreservesParagraph(reread, candidate)
-                        && reread.Text.Where(char.IsLetterOrDigit).SequenceEqual(candidate.Text.Where(char.IsLetterOrDigit)))
-                        rows = refined;
-                }
-                return await RefineGameTextAsync(rows, mask).ConfigureAwait(false);
-            }
+            var baseline = await ReadBitmapCoreAsync(original, origin, scale, cursor, hasTarget, token,
+                allowMixedText, largeDisplayOnly, false, rawGameRows, gameMapChecked: true).ConfigureAwait(false);
+            return await ReadParagraphAsync(original, origin, cursor, scale, token, rawGameRows,
+                alternateRows: baseline, allowMapLabels: true, originalRowsScale: rawGameScale).ConfigureAwait(false);
         }
 
         var gameBackground = hasTarget is null ? null : SampleLuminance(original, local, 64, 40);
         if (hasTarget is not null)
         {
             var sample = SampleLetteringColor(original, local);
-            if (sample is { } fill && (fill.R <= 70
+            if (sample is { } fill && (Luminance(fill.R, fill.G, fill.B) <= 70
                 || !HasDarkTextOnLightBackground(gameBackground!)))
             {
                 using var flat = LightTextMask(original, 0, token, fill);
                 var rows = await RecognizeBitmapAsync(flat, origin, scale, token).ConfigureAwait(false);
                 if (hasTarget(rows))
-                    return await RefineGameTextAsync(rows.Select(line => FixSeriesNumeral(line, rows)).ToArray(), flat).ConfigureAwait(false);
+                    return await RefineGameTextAsync(rows.Select(JoinRomanNumeral).ToArray(), flat).ConfigureAwait(false);
             }
         }
 
@@ -308,7 +332,7 @@ internal sealed partial class ScreenOcr : IDisposable
         var luminance = allowMixedText ? SampleLuminance(original, local) : null;
         using var boosted = luminance is null ? null : BoostFaintText(original, luminance, token);
         var wordImage = boosted ?? original;
-        var originalLines = await RecognizeBitmapAsync(wordImage, origin, scale, token).ConfigureAwait(false);
+        var originalLines = rawGameRows ?? await RecognizeBitmapAsync(wordImage, origin, scale, token).ConfigureAwait(false);
         if (mapScene && GenshinMapLabels.At(originalLines, cursor) is { } mapped)
             return [mapped];
         if (await ReadDialogueOptionAsync(originalLines).ConfigureAwait(false) is { } recognizedOption)
@@ -439,7 +463,7 @@ internal sealed partial class ScreenOcr : IDisposable
                             || adaptiveWord is not null && adaptiveWord.Length >= stableWord.Length)
                             stableLines = adaptive;
                     }
-                    if (HasSeparatedEnglish(stableLines, cursor) || stableLines.Any(line => AppFileName().IsMatch(line.Text)))
+                    if (HasSeparatedEnglish(stableLines, cursor) || stableLines.Any(line => ExecutableFileName().IsMatch(line.Text)))
                         return await CompleteLineAsync(stableLines).ConfigureAwait(false);
                     if (HasSeparatedEnglish(mixedLines, cursor))
                         return await CompleteLineAsync(mixedLines).ConfigureAwait(false);
@@ -467,7 +491,7 @@ internal sealed partial class ScreenOcr : IDisposable
                     async Task<ScreenLine[]> CompleteLineAsync(ScreenLine[] rows)
                     {
                         var completed = CompleteMixedWords(rows, originalLines);
-                        if (rows.Any(line => AppFileName().IsMatch(line.Text)))
+                        if (rows.Any(line => ExecutableFileName().IsMatch(line.Text)))
                             return completed;
 
                         var hyphenated = await ReadMixedHyphenatedSpanAsync(wordImage, origin, cursor, completed, token).ConfigureAwait(false);
@@ -529,18 +553,6 @@ internal sealed partial class ScreenOcr : IDisposable
                 }
             }
         }
-        if (paragraph && hasTarget is not null && TextSelection.At(originalLines, cursor, true, null) is { } originalParagraph)
-        {
-            if (HasMixedBrightText(original, local))
-            {
-                var bright = await ReadBrightTextAsync().ConfigureAwait(false);
-                if (TextSelection.At(bright, cursor, true, null) is { } candidate
-                    && (TextSelection.RestoresParagraphWords(candidate, originalParagraph, bright)
-                        || TextSelection.AgreesOnParagraphWords(candidate, originalParagraph)))
-                    return bright;
-            }
-        }
-
         if (hasTarget is null || hasTarget(originalLines))
             return originalLines;
 
@@ -564,18 +576,7 @@ internal sealed partial class ScreenOcr : IDisposable
             if (await ReadDialogueOptionAsync(filtered, initial).ConfigureAwait(false) is { } option)
                 return option;
 
-            // A single-color mask can erase emphasized words on an otherwise dark text panel.
-            if (initial is null || !HasMixedBrightText(original, local))
-                return filtered;
-
-            var bright = await ReadBrightTextAsync().ConfigureAwait(false);
-            if (TextSelection.At(bright, cursor, true, null) is { } restored
-                && TextSelection.RestoresParagraphWords(restored, initial, bright))
-                return bright;
-
-            var raw = await RecognizeBitmapAsync(original, origin, scale, token).ConfigureAwait(false);
-            return TextSelection.At(raw, cursor, true, null) is { } candidate
-                && TextSelection.RestoresParagraphWords(candidate, initial, raw) ? raw : filtered;
+            return filtered;
         }
 
         async Task<ScreenLine[]> RefineGlyphsAsync(Bitmap readingSource, ScreenLine[] filtered)
@@ -605,14 +606,6 @@ internal sealed partial class ScreenOcr : IDisposable
                 }
             }
             return filtered;
-        }
-
-        async Task<ScreenLine[]> ReadBrightTextAsync()
-        {
-            using var mask = ConvertPixels(original, token,
-                (red, green, blue) => Luminance(red, green, blue) >= 170 ? (byte)0 : (byte)255);
-            var rows = await RecognizeBitmapAsync(mask, origin, scale, token).ConfigureAwait(false);
-            return await RefineGlyphsAsync(mask, rows).ConfigureAwait(false);
         }
 
         async Task<ScreenLine[]?> ReadDialogueOptionAsync(ScreenLine[] lines, Selection? selected = null)
@@ -683,8 +676,7 @@ internal sealed partial class ScreenOcr : IDisposable
                     or ('.', ',') or (',', '.')))
                 return false;
         }
-        return changes != 0 || first != second && UnstableLetterCase().IsMatch(first)
-            && !UnstableLetterCase().IsMatch(second);
+        return changes != 0 || first != second && first.Equals(second, StringComparison.OrdinalIgnoreCase);
     }
 
     [GeneratedRegex(@"\b(?:[A-Z]{2,}[a-z]{2,}|[A-Z]?[a-z]{3,}[A-Z])\b", RegexOptions.CultureInvariant)]
@@ -1303,7 +1295,7 @@ internal sealed partial class ScreenOcr : IDisposable
         ScreenLine[] lines, CancellationToken token)
     {
         var current = TextSelection.At(lines, cursor, false, null);
-        if (lines.Any(row => AppFileName().IsMatch(row.Text)))
+        if (lines.Any(row => ExecutableFileName().IsMatch(row.Text)))
             return null;
         var line = lines.Where(row => ContainsMixedTextAt(row, cursor)).MinBy(row => Math.Abs(row.Bounds.Top - cursor.Y));
         if (line is null || mixedLanguageEngine.Value is not { } mixed)
@@ -1434,7 +1426,7 @@ internal sealed partial class ScreenOcr : IDisposable
         return mixed.Select(line =>
         {
             if (!line.Text.Any(IsHan))
-                return CorrectAppFileName(line);
+                return JoinExecutableName(line);
 
             var words = new List<ScreenWord>();
             for (var index = 0; index < line.Words.Length; index++)
@@ -1471,7 +1463,7 @@ internal sealed partial class ScreenOcr : IDisposable
                 }
                 words.Add(first);
             }
-            return CorrectAppFileName(line with { Words = words.ToArray() });
+            return JoinExecutableName(line with { Words = words.ToArray() });
         }).ToArray();
     }
 
@@ -1491,9 +1483,9 @@ internal sealed partial class ScreenOcr : IDisposable
             && Math.Abs(word.Bounds.Bottom - bounds.Bottom) <= tolerance && word.Bounds.IntersectsWith(middle.Bounds));
     }
 
-    private static ScreenLine CorrectAppFileName(ScreenLine line)
+    private static ScreenLine JoinExecutableName(ScreenLine line)
     {
-        var match = AppFileName().Match(line.Text);
+        var match = ExecutableFileName().Match(line.Text);
         if (!match.Success)
             return line;
 
@@ -1508,124 +1500,26 @@ internal sealed partial class ScreenOcr : IDisposable
                 words.Add(word);
             offset += word.Text.Length + 1;
         }
-        // The product's executable name is known. Outside that exact filename, digits are kept.
-        words.Add(new ScreenWord("ScreenTranslator.exe", bounds));
+        // Join only the characters actually observed in a filename; never substitute a known product name.
+        var observed = Regex.Replace(match.Value, @"\s+", "").Replace('．', '.').Replace('·', '.');
+        words.Add(new ScreenWord(observed, bounds));
         return line with { Words = words.OrderBy(word => word.Bounds.Left).ToArray() };
     }
 
-    private static ScreenLine FixSeriesNumeral(ScreenLine line, ScreenLine[] rows)
+    private static ScreenLine JoinRomanNumeral(ScreenLine line)
     {
         var words = line.Words;
-        if (words.Length < 2 || !words[0].Text.Equals("Series", StringComparison.OrdinalIgnoreCase)
-            || words.Skip(1).Any(word => word.Text.Any(letter => letter is not ('I' or 'V' or 'X' or '1'))))
+        if (words.Length < 3 || words.Skip(1).Any(word => word.Text.Any(letter => letter is not ('I' or 'V' or 'X' or 'L' or 'C' or 'D' or 'M'))))
             return line;
-        var numeral = string.Concat(words.Skip(1).Select(word => word.Text)).Replace('1', 'I');
-        if (numeral is not ("II" or "III" or "IV" or "VI" or "VII" or "VIII" or "IX" or "XI" or "XII" or "XIII" or "XIV" or "XV"))
+        var parts = words.Skip(1).ToArray();
+        if (parts.Zip(parts.Skip(1), (first, next) => next.Bounds.Left - first.Bounds.Right)
+            .Any(gap => gap > line.Bounds.Height * .35f))
             return line;
-
-        // The achievement card shows a centered title directly above its Roman numeral.
-        var center = line.Bounds.Left + line.Bounds.Width / 2;
-        if (!rows.Any(row => row.Text.Equals("Challenger:", StringComparison.OrdinalIgnoreCase)
-                && row.Bounds.Bottom <= line.Bounds.Top + 3
-                && line.Bounds.Top - row.Bounds.Bottom <= line.Bounds.Height
-                && Math.Abs(row.Bounds.Left + row.Bounds.Width / 2 - center) < line.Bounds.Height))
+        var numeral = string.Concat(parts.Select(word => word.Text));
+        if (!Regex.IsMatch(numeral, @"^M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$"))
             return line;
-        var bounds = words.Skip(1).Select(word => word.Bounds).Aggregate(RectangleF.Union);
+        var bounds = parts.Select(word => word.Bounds).Aggregate(RectangleF.Union);
         return line with { Words = [words[0], new ScreenWord(numeral, bounds)] };
-    }
-
-    private static unsafe bool HasMixedBrightText(Bitmap bitmap, Point cursor, bool cyanOnly = false,
-        int? verticalRadius = null)
-    {
-        const int step = 4;
-        var samples = (bitmap.Width + step - 1) / step;
-        var radius = verticalRadius ?? (cyanOnly ? Math.Max(120, bitmap.Width / 16) : 120);
-        var top = Math.Max(0, cursor.Y - radius);
-        var bottom = Math.Min(bitmap.Height, cursor.Y + radius);
-        var data = bitmap.LockBits(new Rectangle(Point.Empty, bitmap.Size), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-        try
-        {
-            for (var y = top; y < bottom; y += step)
-            {
-                var row = (byte*)data.Scan0 + y * data.Stride;
-                var dark = 0;
-                var pale = 0;
-                var colored = 0;
-                for (var x = 0; x < bitmap.Width; x += step)
-                {
-                    var pixel = row + x * 4;
-                    int red = pixel[2], green = pixel[1], blue = pixel[0];
-                    var luma = Luminance(red, green, blue);
-                    var spread = Math.Max(red, Math.Max(green, blue)) - Math.Min(red, Math.Min(green, blue));
-                    if (luma < 120)
-                        dark++;
-                    else if (luma >= 185 && spread <= 37)
-                        pale++;
-                    else if (cyanOnly ? IsBrightCyan(red, green, blue) : luma >= 155 && spread >= 58)
-                        colored++;
-                }
-                if (colored >= Math.Max(4, samples / 100)
-                    && (cyanOnly ? pale >= 6 : dark * 2 >= samples && pale >= colored * 2))
-                    return true;
-            }
-            return false;
-        }
-        finally { bitmap.UnlockBits(data); }
-    }
-
-    private static bool IsBrightCyan(int red, int green, int blue) =>
-        green >= 190 && blue >= 195 && Math.Abs(green - blue) <= 42 && Math.Min(green, blue) - red >= 110;
-
-    private static bool HasGoldLettering(Bitmap image, Point cursor)
-    {
-        var area = Rectangle.Intersect(new Rectangle(Point.Empty, image.Size),
-            new Rectangle(cursor.X - 35, cursor.Y - 24, 71, 49));
-        var gold = 0;
-        for (var y = area.Top; y < area.Bottom; y += 2)
-            for (var x = area.Left; x < area.Right; x += 2)
-            {
-                var color = image.GetPixel(x, y);
-                if (color.R >= 150 && color.G - color.B >= 35 && color.R - color.B >= 65)
-                    gold++;
-            }
-        return gold >= Math.Max(6, area.Width * area.Height / 200);
-    }
-
-    private static bool HasCyanEmphasis(Bitmap bitmap, Point origin, RectangleF selection, ScreenLine[] lines)
-    {
-        // Require distinct pale and cyan words on a selected line. Bright scenery can also
-        // trigger the pixel scan, and a separate cyan label should use the usual reading.
-        foreach (var line in lines)
-        {
-            if (!selection.Contains(line.Bounds) || line.Words.Length < 3)
-                continue;
-            var paleWord = false;
-            var cyanWord = false;
-            foreach (var word in line.Words)
-            {
-                if (word.Text.Count(char.IsAsciiLetter) < 2)
-                    continue;
-                var bounds = Rectangle.Ceiling(word.Bounds);
-                bounds.Offset(-origin.X, -origin.Y);
-                bounds.Intersect(new Rectangle(Point.Empty, bitmap.Size));
-                var pale = 0;
-                var cyan = 0;
-                for (var y = bounds.Top; y < bounds.Bottom; y += 4)
-                    for (var x = bounds.Left; x < bounds.Right; x += 4)
-                    {
-                        var color = bitmap.GetPixel(x, y);
-                        if (IsBrightCyan(color.R, color.G, color.B))
-                            cyan++;
-                        else if (IsPale(color.R, color.G, color.B, 220, 28))
-                            pale++;
-                    }
-                paleWord |= pale >= 3 && pale > cyan * 3;
-                cyanWord |= cyan >= 3 && cyan > pale * 3;
-                if (paleWord && cyanWord)
-                    return true;
-            }
-        }
-        return false;
     }
 
     private static int? LightLetteringCutoff(Bitmap bitmap, Point cursor)
@@ -1649,31 +1543,7 @@ internal sealed partial class ScreenOcr : IDisposable
 
         if (light < 6 || light * 100 < samples * 4 || light * 100 > samples * 58)
             return null;
-        return bitmap.Width > 2560 && white * 5 >= light * 3 ? 236 : 205;
-    }
-
-    private static bool HasMapLabelColors(Bitmap bitmap, Point cursor, int? sampleRadius = null)
-    {
-        var radius = sampleRadius ?? Math.Clamp(bitmap.Width / 34, 24, 40);
-        var lettering = 0;
-        var terrain = 0;
-        var samples = 0;
-        for (var y = Math.Max(0, cursor.Y - radius); y < Math.Min(bitmap.Height, cursor.Y + radius); y += 2)
-            for (var x = Math.Max(0, cursor.X - radius); x < Math.Min(bitmap.Width, cursor.X + radius); x += 2)
-            {
-                var color = bitmap.GetPixel(x, y);
-                if (IsPale(color.R, color.G, color.B, 145, 9)
-                    || color.R >= 225 && color.R - color.B is >= 17 and <= 26 && color.R > color.G)
-                    lettering++;
-                if (color is { R: var r, G: var g, B: var b }
-                    && (b - r >= 22 && g - r >= 19 && Math.Abs(b - g) <= 60
-                        || g - r >= 2 && r - b >= 9 && g - b >= 11
-                        || r - b >= 30 && g - b >= 25 && g >= 100))
-                    terrain++;
-                samples++;
-            }
-        var minimumTerrain = sampleRadius is >= 96 ? 30 : 45;
-        return lettering >= 6 && lettering * 100 >= samples * 2 && terrain * 100 >= samples * minimumTerrain;
+        return white * 5 >= light * 3 ? 236 : 205;
     }
 
     private static bool IsPale(int red, int green, int blue, int cutoff, int spread = 16)
@@ -1683,30 +1553,42 @@ internal sealed partial class ScreenOcr : IDisposable
         return darkest >= cutoff && brightest - darkest <= spread;
     }
 
-    private static Color? SampleLetteringColor(Bitmap bitmap, Point cursor)
+    private static Color? SampleLetteringColor(Bitmap bitmap, Point cursor) =>
+        SampleLetteringColors(bitmap, cursor).Select(color => (Color?)color).FirstOrDefault();
+
+    private static Color[] SampleLetteringColors(Bitmap bitmap, Point cursor)
     {
         var radius = Math.Clamp(bitmap.Width / 90, 12, 36);
-        // Sample solid cream lettering and cyan labels separately from the surrounding scenery.
+        // Find a repeated foreground color by its contrast with the local background, without prescribing a hue.
         var histogram = new Dictionary<int, int>();
         var sampleCount = 0;
+        var channels = new[] { new int[256], new int[256], new int[256] };
+        for (var y = Math.Max(0, cursor.Y - radius); y < Math.Min(bitmap.Height, cursor.Y + radius); y += 2)
+            for (var x = Math.Max(0, cursor.X - radius); x < Math.Min(bitmap.Width, cursor.X + radius); x += 2)
+            {
+                var color = bitmap.GetPixel(x, y);
+                channels[0][color.R]++; channels[1][color.G]++; channels[2][color.B]++;
+            }
+        var background = channels.Select(channel =>
+        {
+            var middle = channel.Sum() / 2;
+            var median = 0;
+            while (median < 255 && (middle -= channel[median]) > 0) median++;
+            return median;
+        }).ToArray();
         for (var y = Math.Max(0, cursor.Y - radius); y < Math.Min(bitmap.Height, cursor.Y + radius); y += 2)
             for (var x = Math.Max(0, cursor.X - radius); x < Math.Min(bitmap.Width, cursor.X + radius); x += 2)
             {
                 var color = bitmap.GetPixel(x, y);
                 sampleCount++;
-                var warm = color.R >= 225 && color.R > color.G + 4 && color.G >= color.B + 8 && color.R - color.B <= 27;
-                var cyan = color.R <= 70 && color.G >= 203 && Math.Abs(color.G - color.B) < 8;
-                if (!warm && !cyan)
+                if (Math.Max(Math.Abs(color.R - background[0]), Math.Max(Math.Abs(color.G - background[1]), Math.Abs(color.B - background[2]))) < 60)
                     continue;
                 var key = color.R / 8 << 10 | color.G / 8 << 5 | color.B / 8;
                 histogram[key] = histogram.GetValueOrDefault(key) + 1;
             }
-        if (histogram.Count == 0)
-            return null;
-        var best = histogram.MaxBy(pair => pair.Value);
-        if (best.Value < 8 || best.Value * 100 > sampleCount * 58)
-            return null;
-        return Color.FromArgb((best.Key >> 10) * 8 + 4, (best.Key >> 5 & 31) * 8 + 4, (best.Key & 31) * 8 + 4);
+        return histogram.Where(pair => pair.Value >= 6 && pair.Value * 100 <= sampleCount * 58)
+            .OrderByDescending(pair => pair.Value).Take(3)
+            .Select(pair => Color.FromArgb((pair.Key >> 10) * 8 + 4, (pair.Key >> 5 & 31) * 8 + 4, (pair.Key & 31) * 8 + 4)).ToArray();
     }
 
     private static Bitmap LightTextMask(Bitmap original, int cutoff, CancellationToken token, Color? fill = null,
@@ -1719,7 +1601,7 @@ internal sealed partial class ScreenOcr : IDisposable
             return keep == whiteOnBlack ? (byte)255 : (byte)0;
         });
 
-    private static Bitmap ConvertPixels(Bitmap original, CancellationToken token, Func<byte, byte, byte, byte> transform)
+    private static unsafe Bitmap ConvertPixels(Bitmap original, CancellationToken token, Func<byte, byte, byte, byte> transform)
     {
         // Threshold at native resolution so interpolation cannot blend the lettering with scenery.
         var mask = original.Clone(new Rectangle(Point.Empty, original.Size), PixelFormat.Format32bppArgb);
@@ -1728,19 +1610,18 @@ internal sealed partial class ScreenOcr : IDisposable
             var data = mask.LockBits(new Rectangle(Point.Empty, mask.Size), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
             try
             {
-                var row = new byte[mask.Width * 4];
-                for (var y = 0; y < mask.Height; y++)
+                var rowBytes = mask.Width * 4;
+                var height = mask.Height;
+                for (var y = 0; y < height; y++)
                 {
                     token.ThrowIfCancellationRequested();
-                    var address = IntPtr.Add(data.Scan0, y * data.Stride);
-                    Marshal.Copy(address, row, 0, row.Length);
-                    for (var offset = 0; offset < row.Length; offset += 4)
+                    var row = (byte*)data.Scan0 + y * data.Stride;
+                    for (var offset = 0; offset < rowBytes; offset += 4)
                     {
                         var value = transform(row[offset + 2], row[offset + 1], row[offset]);
                         row[offset] = row[offset + 1] = row[offset + 2] = value;
                         row[offset + 3] = 255;
                     }
-                    Marshal.Copy(row, 0, address, row.Length);
                 }
             }
             finally { mask.UnlockBits(data); }
@@ -1829,21 +1710,7 @@ internal sealed partial class ScreenOcr : IDisposable
             graphics.DrawImage(original, new Rectangle(Point.Empty, scaled.Size), 0, 0, original.Width, original.Height, GraphicsUnit.Pixel);
         }
 
-        var bitmapData = scaled.LockBits(new Rectangle(Point.Empty, scaled.Size), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-        using var writer = new DataWriter();
-        try
-        {
-            var pixels = new byte[bitmapData.Stride * bitmapData.Height];
-            Marshal.Copy(bitmapData.Scan0, pixels, 0, pixels.Length);
-            writer.WriteBytes(pixels);
-        }
-        finally
-        {
-            scaled.UnlockBits(bitmapData);
-        }
-
-        using var input = new SoftwareBitmap(BitmapPixelFormat.Bgra8, scaled.Width, scaled.Height, BitmapAlphaMode.Ignore);
-        input.CopyFromBuffer(writer.DetachBuffer());
+        using var input = CopyOcrPixels(scaled, token);
         var result = await (languageEngine ?? engine).RecognizeAsync(input).AsTask(token).ConfigureAwait(false);
         var scaleX = (float)scaled.Width / original.Width;
         var scaleY = (float)scaled.Height / original.Height;
@@ -1862,7 +1729,7 @@ internal sealed partial class ScreenOcr : IDisposable
             var height = Math.Abs(bounds.Width * sine) + Math.Abs(bounds.Height * cosine);
             return new ScreenWord(word.Text, new RectangleF(origin.X + (float)(centerX - width / 2) / scaleX,
                 origin.Y + (float)(centerY - height / 2) / scaleY, (float)width / scaleX, (float)height / scaleY));
-        }))).Select(CorrectAppFileName).ToArray();
+        }))).Select(JoinExecutableName).ToArray();
     }
 
     internal static IEnumerable<ScreenLine> BuildLines(IEnumerable<ScreenWord> source)
@@ -1891,7 +1758,14 @@ internal sealed partial class ScreenOcr : IDisposable
             if (words.Count > 0 && CanJoin(words[^1], word))
             {
                 var previous = words[^1];
-                words[^1] = new ScreenWord(previous.Text + word.Text, RectangleF.Union(previous.Bounds, word.Bounds));
+                var confidence = float.IsNaN(previous.Confidence) ? word.Confidence : float.IsNaN(word.Confidence)
+                    ? previous.Confidence : Math.Min(previous.Confidence, word.Confidence);
+                var letterConfidence = float.IsNaN(previous.LetterConfidence) ? word.LetterConfidence
+                    : float.IsNaN(word.LetterConfidence) ? previous.LetterConfidence
+                    : (previous.LetterConfidence * previous.Text.Length + word.LetterConfidence * word.Text.Length)
+                        / (previous.Text.Length + word.Text.Length);
+                words[^1] = new ScreenWord(previous.Text + word.Text, RectangleF.Union(previous.Bounds, word.Bounds),
+                    confidence, letterConfidence);
             }
             else
             {
@@ -1978,6 +1852,8 @@ internal static partial class TextSelection
 
     private static string? WordAt(ScreenWord word, int cursorX)
     {
+        if (IsStructuredCode(word.Text))
+            return word.Text;
         // OCR can place slash-separated words in one bounding box. Use the hovered part of the box.
         var position = Math.Clamp((cursorX - word.Bounds.Left) / Math.Max(1f, word.Bounds.Width), 0f, 1f)
             * word.Text.Length;
@@ -1987,6 +1863,7 @@ internal static partial class TextSelection
 
     private static Selection? ParagraphAt(ScreenLine[] lines, Point cursor)
     {
+        lines = MergeInlineFragments(lines);
         if (ListAt(lines, cursor) is { } list)
             return list;
 
@@ -2016,7 +1893,7 @@ internal static partial class TextSelection
         }
         above.Reverse();
         var block = above.Append(anchor).Concat(below).ToArray();
-        var text = string.Join(IsMetadataBlock(block) ? '\n' : ' ', block.Select(line => line.Text));
+        var text = RepeatedItemText(block) ?? string.Join(IsMetadataBlock(block) ? '\n' : ' ', block.Select(line => line.Text));
         var bounds = block.Select(line => line.Bounds).Aggregate(RectangleF.Union);
         return new Selection(text, text, bounds);
     }
@@ -2140,6 +2017,16 @@ internal static partial class TextSelection
             var wider = Math.Max(current.Width, next.Width);
             var first = below ? line : candidate;
             var second = below ? candidate : line;
+            if (first.Words.Length == 1 && first.Bounds.Width < second.Bounds.Width * .65f
+                && gap > height * .3f && !char.IsPunctuation(first.Text[^1]))
+                return false;
+            if (first.Words.Length <= 2 && second.Words.Length >= 3 && gap > height * .3f
+                && !char.IsPunctuation(first.Text[^1])
+                && Math.Abs(first.Bounds.Left + first.Bounds.Width / 2 - second.Bounds.Left - second.Bounds.Width / 2) < height)
+                return false;
+            if (gap > height * .55f && first.Words.Length <= 5 && !char.IsPunctuation(first.Text[^1])
+                && (second.Words.Length <= 8 || first.Bounds.Width < second.Bounds.Width * .65f))
+                return false;
             if (first.Words.Length <= 4 && gap > height * .55f
                 && CountdownLabel().IsMatch(second.Text) && !char.IsPunctuation(first.Text[^1]))
                 return false;
@@ -2164,7 +2051,7 @@ internal static partial class TextSelection
 
     internal static Rectangle ExtendParagraphCapture(Rectangle capture, Rectangle available, RectangleF text, float lineHeight)
     {
-        var margin = Math.Max(Math.Clamp(capture.Width * 0.022f, 30f, 90f), lineHeight * 1.6f);
+        var margin = Math.Max(30f, lineHeight * 1.6f);
         var top = capture.Top;
         var bottom = capture.Bottom;
         // Read more only in the direction where the selected paragraph reaches the image edge.

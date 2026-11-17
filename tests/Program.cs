@@ -8,12 +8,16 @@ if (args.Contains("--environment-only", StringComparer.Ordinal))
     return EnvironmentTests.Run();
 EnvironmentTests.Run();
 var zoomMatrix = args.Contains("--zoom-matrix", StringComparer.Ordinal);
+var reportProgress = args.Contains("--progress", StringComparer.Ordinal);
+var reportTimings = args.Contains("--timings", StringComparer.Ordinal);
 double[] requiredZooms = [1.75, 1.5, 1.25, 1.0, 0.75, 0.5];
-var fixtureRoot = args.FirstOrDefault(arg => arg != "--zoom-matrix") ?? Path.Combine(
+var fixtureRoot = args.FirstOrDefault(arg => arg is not ("--zoom-matrix" or "--progress" or "--timings")) ?? Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ScreenTranslatorDev", "ocr-fixtures");
 var failures = 0;
 var checks = 0;
 var zoomResults = new Dictionary<double, (int Checks, int Failures)>();
+foreach (var result in OcrPixelTests.Run())
+    Check(result.Name, result.Expected, result.Actual);
 var settingsPath = Path.Combine(Path.GetTempPath(), $"screen-translator-settings-{Guid.NewGuid():N}.json");
 try
 {
@@ -57,6 +61,8 @@ finally
     File.Delete(credentialsPath + ".tmp");
 }
 using var ocr = ScreenOcr.Create() ?? throw new InvalidOperationException("Windows English OCR is required.");
+foreach (var result in await OcrBatchTests.RunAsync(ocr))
+    Check(result.Name, result.Expected, result.Actual);
 var applications = new ApplicationGlossaries();
 var genshin = applications.ForProcess("YuanShen")!;
 var excel = applications.ForProcess("excel")!;
@@ -257,6 +263,122 @@ finally
 }
 
 const string quest = "Use the lamp crystal to light up the secret message";
+const string wavebinderDescription = "A monstrously strong beast. At intervals, it drinks a hot beverage to build up its Courage. "
+    + "Once its Courage is full, it enters the Valiant state, causing its attacks to become more ferocious and greatly increasing "
+    + "all Elemental RES and Physical RES. While in this state, its Courage will be continuously consumed, and it will exit the "
+    + "state once its Courage is depleted.";
+await TestFixture("wavebinder-description", Paragraphs(wavebinderDescription,
+    (680, 181), (300, 181), (600, 240), (1200, 354), (300, 412), (800, 472), (600, 531)), [1.0]);
+const string wavebinderReactions = "Taking Electro DMG or Electro DMG considered as DMG from the corresponding Stellar Glimmer reaction reduces its "
+    + "accumulated Courage, or causes it to exit the Valiant state more quickly. Additionally, Stellar Glimmer reactions also seem to "
+    + "interfere with its attempts to drink hot beverages...";
+await TestFixture("wavebinder-reactions", Paragraphs(wavebinderReactions,
+    (150, 146), (750, 146), (600, 202), (1400, 202), (900, 260), (200, 319), (600, 377), (1000, 435)), [1.0]);
+const string abyssChallenges = "Floor 11 Chamber 3 Second Half\n"
+    + "Remaining challenge time longer than 180 sec.\n"
+    + "Remaining challenge time longer than 300 sec.\n"
+    + "Remaining challenge time longer than 420 sec.";
+await TestFixture("abyss-challenge-list", new[] { (310, 80), (700, 80), (300, 145), (350, 196),
+        (300, 263), (350, 315), (300, 385), (350, 436) }
+    .Select(point => new Sample(point.Item1, point.Item2, true, abyssChallenges)), [1.0]);
+await TestFixture("abyss-challenge-list", new[]
+{
+    new Sample(100, 80, false, "Floor"), new Sample(390, 80, false, "Chamber"),
+    new Sample(850, 80, false, "Half"), new Sample(300, 145, false, "Remaining"),
+    new Sample(470, 263, false, "challenge"), new Sample(640, 385, false, "time"),
+    new Sample(235, 196, false, "longer"), new Sample(335, 315, false, "than"),
+    new Sample(555, 436, false, "sec")
+}, [1.0]);
+const string learningList = "• Designing an extraction schema whose descriptions double as extraction instructions\n"
+    + "• A small JSON rule language with scopes and three-valued logic\n"
+    + "• Compiling policy prose with a validator-driven repair loop\n"
+    + "• LLM assertions: rules like \"no one who looks under 25\" as model-judged fields\n"
+    + "• Extraction with structured outputs, including from images\n"
+    + "• Adding a rule from one plain-English sentence\n"
+    + "• Evaluating against labeled samples across three domains";
+await TestFixture("web-learning-list", new[] { (120, 59), (350, 91), (340, 156), (260, 251) }
+    .Select(point => new Sample(point.Item1, point.Item2, true, learningList)), [1.0], game: false);
+const string schemaSteps = "1. Schema (you write it): the typed fields that can be known about a piece of content.\n"
+    + "2. Compiler (Claude, once per policy change): turns each policy clause into rules over those fields, checked by a static validator.\n"
+    + "3. Extractor (Claude, once per piece of content): one call reads text and image into typed fields.\n"
+    + "4. Engine (no model): applies rules to fields. Same inputs, same verdict, with a per-assertion audit trail.";
+await TestFixture("web-schema-steps", new[] { (90, 28), (600, 28), (110, 84), (300, 116), (500, 148) }
+    .Select(point => new Sample(point.Item1, point.Item2, true, schemaSteps)), [1.0], game: false);
+const string ruleMeaning = "• when is the violation (rule fires means policy breached), the same convention as linters and firewall rules. "
+    + "Traces read \"fired because X\".";
+await TestFixture("web-rule-semantics-overlay", new[] { (100, 31), (330, 31), (680, 31), (160, 55) }
+    .Select(point => new Sample(point.Item1, point.Item2, true, ruleMeaning)), [1.0], game: false);
+const string factoryLayout = "5\nOne factory many\nIsolation by git\nScripts decide done\nDurable run leases\nSmall core optional";
+await TestFixture("web-factory-list", new[] { (210, 85), (130, 128), (210, 218), (450, 270), (180, 450) }
+    .Select(point => new Sample(point.Item1, point.Item2, true, factoryLayout,
+        Project: text => text is null ? null : text.Count(letter => letter == '•') + "\n" + string.Join('\n',
+            text.Split('\n').Select(line => string.Join(' ', System.Text.RegularExpressions.Regex.Matches(line, @"[A-Za-z]+")
+                .Take(3).Select(match => match.Value)))))), [1.0, .75], game: false);
+const string factoryFollowup = "• One factory, many agents. build_backend in src/symphony/backends/__init__.py picks the adapter from "
+    + "agent.kind; agent.profiles adds a plain-text CLI (format: text) or an ACP agent (format: acp) with no Python.\n"
+    + "• Isolation by git worktree, not containers. scripts/symphony-setup-worktree.sh attaches each workspace on a symphony/<ID> branch.\n"
+    + "• Scripts decide done. A verify: command runs when a ticket leaves a lane; non-zero rewinds it (workflow/verify.py).\n"
+    + "• Durable run leases. run_registry.py holds SQLite (WAL) leases and retry, pause, and budget flags across restarts.\n"
+    + "• Small core, optional extras. PM Workspace, operator chat, and app release contracts are separate distributions under packages/.";
+// Check every visible letter and digit, all five item boundaries and markers.
+// Code punctuation/spacing varies between recognizers; exact code-cell tests
+// above and below retain their own exact assertions.
+static string? ListContents(string? text) => text is null ? null : string.Join('\n', text.Split('\n')
+    .Select(line => string.Concat(line.Where(letter => char.IsLetterOrDigit(letter) || letter == '•'))));
+await TestFixture("web-factory-followup", new[] { (210, 85), (130, 128), (210, 218), (450, 270), (180, 450) }
+    .Select(point => new Sample(point.Item1, point.Item2, true, ListContents(factoryFollowup)!, Project: ListContents)),
+    [1.0, .75], game: false);
+using (var page = new Bitmap(Path.Combine(fixtureRoot, "web-factory-followup.png")))
+foreach (var (width, height, left, top) in new[] { (1920, 1080, 85, 185), (3840, 2160, 180, 300) })
+{
+    using var viewport = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+    using (var graphics = Graphics.FromImage(viewport))
+    {
+        graphics.Clear(Color.White);
+        graphics.DrawImageUnscaled(page, left, top);
+    }
+    await TestRenderedZooms($"web-factory-viewport-{width}", viewport,
+        new[] { (210, 85), (130, 128), (210, 218), (450, 270), (180, 450) }
+            .Select(point => new Sample(left + point.Item1, top + point.Item2, true,
+                ListContents(factoryFollowup)!, Project: ListContents)), game: false, ratios: [1.0]);
+}
+var jarRows = new (string Id, string File)[]
+{
+    ("MAHJONG_BOUT_PLAYER", "jj-match-bigdata-mahjong-bout-player-2.0.jar"),
+    ("MAHJONG_BOUT_TEAM", "jj-match-bigdata-mahjong-bout-team-2.0.jar"),
+    ("MAHJONG_DECK_PLAYER", "jj-match-bigdata-mahjong-deck-player-2.0.jar"),
+    ("MAHJONG_REPLAY_PLAYER", "jj-match-bigdata-mahjong-replay-player-2.0.jar"),
+    ("MAHJONG_MATCH_PLAYER", "jj-match-bigdata-mahjong-match-player-2.0.jar"),
+    ("PLAYER_HONOUR", "jj-match-bigdata-applet-player-honour-2.0.jar"),
+    ("HONOUR_TITLE", "jj-match-bigdata-applet-honour-title-2.0.jar"),
+    ("HOT_TEAM", "jj-match-bigdata-applet-hot-team-2.0.jar"),
+    ("BIGDATA_LANDLORD_BOUT_INFO", "jj-match-bigdata-landlord-bout-info-2.0.jar"),
+    ("BIGDATA_BMS_PLAYER_MATCH", "jj-match-bigdata-player-match-2.0.jar"),
+    ("BIGDATA_APPLET_MATCH_RESULT", "jj-match-bigdata-match-result-2.0.jar"),
+    ("DORIS_BOUT_INFO", "jj-match-bigdata-bout-info-2.0.jar"),
+    ("DORIS_TABLE_INFO", "jj-match-bigdata-table-info-2.0.jar")
+};
+await TestFixture("jar-table", jarRows.SelectMany((row, index) =>
+    new[] { false, true }.SelectMany(paragraph => new[]
+    {
+        new Sample(30, 73 + index * 39, paragraph, row.Id),
+        new Sample(Math.Min(130, 20 + (row.Id.Length - 2) * 9), 73 + index * 39, paragraph, row.Id),
+        new Sample(338, 73 + index * 39, paragraph, row.File),
+        new Sample(500, 73 + index * 39, paragraph, row.File),
+        new Sample(326 + (row.File.Length - 2) * 9, 73 + index * 39, paragraph, row.File)
+    })), [1.0], game: false);
+await TestFixture("jar-table-overlay", new[] { false, true }.SelectMany(paragraph => new[]
+{
+    new Sample(410, 73, paragraph, jarRows[0].File), new Sample(740, 73, paragraph, jarRows[0].File),
+    new Sample(90, 112, paragraph, jarRows[1].Id), new Sample(180, 190, paragraph, jarRows[3].Id)
+}), [1.0], game: false);
+foreach (var prefix in new[] { "Pale Crown Palac", "Teplo Oasi", "Wolvendo", "Stormterror's Lai" })
+{
+    var bounds = new RectangleF(10, 10, prefix.Length * 12, 24);
+    var observed = new ScreenLine([new ScreenWord(prefix, bounds)], bounds);
+    Check($"map glossary does not complete unseen suffix: {prefix}", null,
+        GenshinMapLabels.At([observed], new Point(20, 20))?.Text);
+}
 await TestFixture("genshin-guild-greeting", Paragraphs(
     "Ad astra abyssosque! Welcome to the Adventurers' Guild Headquarters.", (750, 211), (800, 286), (1420, 284)));
 await TestFixture("pale-crown-palace", new[] { 107, 259, 423 }.SelectMany(x => new[]
@@ -410,6 +532,75 @@ foreach (var (fontName, style, ink, background) in new[]
     await TestRenderedZooms(fontName, bitmap, [new Sample(87, 83, true, "Follow the winding path and open the gate.")]);
 }
 
+foreach (var (background, normal, emphasis) in new[]
+{
+    (Color.FromArgb(18, 24, 35), Color.White, Color.FromArgb(255, 110, 110)),
+    (Color.FromArgb(18, 24, 35), Color.White, Color.LimeGreen),
+    (Color.FromArgb(18, 24, 35), Color.White, Color.DeepSkyBlue),
+    (Color.FromArgb(18, 24, 35), Color.White, Color.Orchid),
+    (Color.WhiteSmoke, Color.Black, Color.DarkRed),
+    (Color.WhiteSmoke, Color.Black, Color.DarkGreen)
+})
+{
+    string[] lines = [
+        "Small robots carry spare parts across the station.",
+        "Every marker keeps its own label and number.",
+        "Bright labels remain part of the same sentence.",
+        "Engineers inspect the whole paragraph from any line.",
+        "The next shipment includes several replacement panels.",
+        "The final line confirms that the passage is complete."
+    ];
+    using var image = new Bitmap(950, 370, PixelFormat.Format32bppArgb);
+    using (var graphics = Graphics.FromImage(image))
+    using (var font = new Font("Georgia", 27, FontStyle.Regular, GraphicsUnit.Pixel))
+    using (var textBrush = new SolidBrush(normal))
+    using (var accentBrush = new SolidBrush(emphasis))
+    using (var format = (StringFormat)StringFormat.GenericTypographic.Clone())
+    {
+        format.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
+        graphics.Clear(background);
+        graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        for (var index = 0; index < lines.Length; index++)
+        {
+            var words = lines[index].Split(' ');
+            var parts = new[] { string.Join(' ', words[..2]) + " ", string.Join(' ', words[2..5]) + " ", string.Join(' ', words[5..]) };
+            var x = 45f;
+            for (var part = 0; part < parts.Length; part++)
+            {
+                graphics.DrawString(parts[part], font, part == 1 ? accentBrush : textBrush,
+                    new PointF(x, 45 + index * 44), format);
+                x += graphics.MeasureString(parts[part], font, int.MaxValue, format).Width;
+            }
+        }
+    }
+    await TestRenderedZooms($"generated paragraph {emphasis.Name}", image,
+        Paragraphs(string.Join(' ', lines), (140, 61), (380, 149), (450, 281)), ratios: [1.0]);
+}
+
+foreach (var (paper, grid) in new[] { (Color.WhiteSmoke, Color.SteelBlue), (Color.FromArgb(34, 39, 47), Color.Goldenrod) })
+{
+    using var image = new Bitmap(1500, 260, PixelFormat.Format32bppArgb);
+    var ink = paper.GetBrightness() < .5f ? Color.White : Color.Black;
+    using (var graphics = Graphics.FromImage(image))
+    using (var font = new Font("Consolas", 20, FontStyle.Regular, GraphicsUnit.Pixel))
+    using (var pen = new Pen(grid))
+    using (var brush = new SolidBrush(ink))
+    {
+        graphics.Clear(paper);
+        foreach (var y in new[] { 30, 80, 130 }) graphics.DrawLine(pen, 20, y, 880, y);
+        foreach (var x in new[] { 20, 330, 880 }) graphics.DrawLine(pen, x, 30, x, 130);
+        graphics.DrawString("warehouse_batch_item", font, brush, 35, 45);
+        graphics.DrawString("data-review.zip", font, brush, 345, 45);
+        graphics.DrawString("ui_parser_read_state", font, brush, 35, 95);
+        graphics.DrawString("repair-notes.txt", font, brush, 345, 95);
+    }
+    foreach (var paragraphMode in new[] { false, true })
+        await TestRenderedZooms($"generated table {paper.Name}", image, [
+            new(120, 58, paragraphMode, "warehouse_batch_item"), new(450, 58, paragraphMode, "data-review.zip"),
+            new(120, 108, paragraphMode, "ui_parser_read_state"), new(450, 108, paragraphMode, "repair-notes.txt")
+        ], game: false, ratios: [1.0]);
+}
+
 using (var frame = new Bitmap(920, 360, PixelFormat.Format32bppArgb))
 using (var graphics = Graphics.FromImage(frame))
 using (var desktopFont = new Font("Segoe UI", 16, FontStyle.Regular, GraphicsUnit.Pixel))
@@ -473,6 +664,35 @@ Check("an indented numbered-list continuation joins its own item", numberedItems
     TextSelection.At(numbered, new Point(100, 21), true, null)?.Text);
 Check("hovering an indented continuation selects the complete list", numberedItems,
     TextSelection.At(numbered, new Point(100, 45), true, null)?.Text);
+ScreenLine[] wrappedBullets =
+[
+    LayoutLine(10, 10, 8, "•"), LayoutLine(36, 10, 280, "First item begins here."),
+    LayoutLine(36, 36, 280, "An ordinary continuation"), LayoutLine(36, 74, 280, "ends the first item."),
+    LayoutLine(10, 106, 8, "•"), LayoutLine(36, 106, 280, "Second item begins here."),
+    LayoutLine(36, 138, 280, "More details continue."),
+    LayoutLine(10, 170, 8, "•"), LayoutLine(36, 170, 280, "Third item begins here."),
+    LayoutLine(36, 202, 280, "Another ordinary continuation."),
+    LayoutLine(10, 234, 8, "•"), LayoutLine(36, 234, 280, "Fourth item is short."),
+    LayoutLine(10, 270, 8, "•"), LayoutLine(36, 270, 280, "Fifth item begins here."),
+    LayoutLine(36, 296, 280, "The last continuation.")
+];
+const string wrappedBulletItems = "• First item begins here. An ordinary continuation ends the first item.\n"
+    + "• Second item begins here. More details continue.\n• Third item begins here. Another ordinary continuation.\n"
+    + "• Fourth item is short.\n• Fifth item begins here. The last continuation.";
+foreach (var y in new[] { 80, 145, 300 })
+    Check($"wrapped bullet continuation at {y} never invents markers", wrappedBulletItems,
+        TextSelection.At(wrappedBullets, new Point(100, y), true, null)?.Text);
+foreach (var width in new[] { 640, 1920, 3840 })
+{
+    var available = new Rectangle(0, 0, width, 1800);
+    var capture = new Rectangle(0, 100, width, 600);
+    var complete = new RectangleF(50, 150, width - 100, 400);
+    Check($"complete paragraph with stable glyph size does not expand at width {width}", capture.ToString(),
+        TextSelection.ExtendParagraphCapture(capture, available, complete, 22).ToString());
+    var clipped = new RectangleF(50, 150, width - 100, capture.Bottom - 160);
+    Check($"paragraph near the lower edge still expands at width {width}", "True",
+        (TextSelection.ExtendParagraphCapture(capture, available, clipped, 22).Bottom > capture.Bottom).ToString());
+}
 Check("aligned key-value rows stay separate", "Build ID: 128\nTarget: Windows",
     TextSelection.At([LayoutLine(20, 10, 150, "Build ID: 128"), LayoutLine(20, 36, 170, "Target: Windows")],
         new Point(80, 46), true, null)?.Text);
@@ -483,7 +703,8 @@ await TestFixture("terminal-command-list", new[] { 62, 530 }.Select(x =>
     new Sample(x, 75, true, slashLayout, Project: CommandDescriptions)), [1.0], game: false);
 await TestFixture("terminal-command-list-bracket", new[] { 65, 500 }.Select(x =>
     new Sample(x, 95, true, slashLayout, Project: CommandDescriptions)), [1.0], game: false);
-const string statusLines = "OpenAI Codex\n/mnt/d/GitDesktopRep\npermissions: YOLO mode";
+// The dim version is visible on the same baseline and belongs to the header too.
+const string statusLines = "OpenAI Codex (v0.169.0)\n/mnt/d/GitDesktopRep\npermissions: YOLO mode";
 await TestFixture("terminal-status-header", new[] { 47, 77, 112 }.Select(y =>
     new Sample(164, y, true, statusLines)), [1.0], game: false);
 
@@ -744,8 +965,12 @@ async Task TestSample(string name, Bitmap frame, Sample sample, double ratio, bo
     var area = new Rectangle(Point.Empty, frame.Size);
     var capture = HoverRecognition.CaptureArea(area, cursor, dpi, sample.Paragraph);
     var wider = sample.Paragraph ? capture : HoverRecognition.CaptureArea(area, cursor, dpi, false, expanded: true);
+    var started = System.Diagnostics.Stopwatch.GetTimestamp();
     var (target, _) = await HoverRecognition.ReadAsync(area, capture, wider, cursor, sample.Paragraph,
-        game, game ? genshin : null, Read, default, ReadOption);
+        game, game ? genshin : null, Read, default, ReadOption, ReadLayout);
+    if (reportTimings)
+        Console.WriteLine("TIMING " + JsonSerializer.Serialize(new { name, ratio, sample.X, sample.Y,
+            paragraph = sample.Paragraph, ms = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds }));
     var actual = target is null ? null : game ? genshin.CorrectOcr(target.Text) : target.Text;
     var description = $"{name} {ratio} ({sample.X},{sample.Y}) {(sample.Paragraph ? "paragraph" : "word")}";
     Check(description, sample.Expected, sample.Project is null ? actual : sample.Project(actual));
@@ -770,15 +995,24 @@ async Task TestSample(string name, Bitmap frame, Sample sample, double ratio, bo
         using var bitmap = frame.Clone(region, PixelFormat.Format32bppArgb);
         return await ocr.ReadOptionBitmapAsync(bitmap, region.Location, point, token);
     }
+
+    async Task<ScreenLine[]> ReadLayout(Rectangle region, float scale, Point point, CancellationToken token)
+    {
+        using var bitmap = frame.Clone(region, PixelFormat.Format32bppArgb);
+        return await ocr.ReadLayoutBitmapAsync(bitmap, region.Location, scale, point, token);
+    }
 }
 
 void Check(string subject, string? expected, string? actual)
 {
     checks++;
-    if (string.Equals(expected, actual, StringComparison.Ordinal))
-        return;
-    failures++;
-    Console.Error.WriteLine($"{subject}\n  expected: {expected ?? "(none)"}\n  actual:   {actual ?? "(none)"}");
+    if (!string.Equals(expected, actual, StringComparison.Ordinal))
+    {
+        failures++;
+        Console.Error.WriteLine($"{subject}\n  expected: {expected ?? "(none)"}\n  actual:   {actual ?? "(none)"}");
+    }
+    if (reportProgress)
+        Console.WriteLine($"PROGRESS {checks - failures}/{checks} checks passed; {failures} failed.");
 }
 
 internal sealed record Sample(int X, int Y, bool Paragraph, string? Expected, string? Chinese = null,

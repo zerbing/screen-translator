@@ -16,6 +16,13 @@ internal static class GenshinMapLabels
 
     internal static bool IsKnownLabel(string text) => Names.Value.Any(name => name.Text == text);
 
+    // A prefix only requests another reading of the image; it never supplies missing letters.
+    internal static bool HasLabelPrefix(string text)
+    {
+        var key = Key(text);
+        return key.Length >= 4 && Names.Value.Any(name => name.Key.StartsWith(key[..4], StringComparison.Ordinal));
+    }
+
     internal static bool IsLabelFragment(string text)
     {
         var key = Key(text);
@@ -85,17 +92,12 @@ internal static class GenshinMapLabels
             {
                 if (Math.Abs(observed.Length - key.Length) > Math.Max(allowed, 3))
                     continue;
+                if (observed.Length < key.Length && key.StartsWith(observed, StringComparison.Ordinal))
+                    continue;
                 var distance = EditDistance(observed, key);
                 var area = bounds;
                 if (distance > allowed)
-                {
-                    // A marker can cover the tail of a name. Require most of a distinctive prefix.
-                    if (observed.Length < 6 || key.Length - observed.Length is < 2 or > 3
-                        || EditDistance(observed, key[..observed.Length]) > 1)
-                        continue;
-                    area.Width += (key.Length - observed.Length) * (bounds.Width / observed.Length);
-                    distance = allowed + 1;
-                }
+                    continue;
                 if (distance > 0 && !observed.StartsWith(key[..2], StringComparison.Ordinal))
                     continue;
                 var dx = Math.Max(0, Math.Max(area.Left - cursor.X, cursor.X - area.Right));

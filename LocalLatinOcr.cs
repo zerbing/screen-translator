@@ -6,7 +6,7 @@ namespace ScreenTranslator;
 
 // A second local recognizer for small Latin runs that Windows OCR splits or drops.
 // Images stay in memory; neither recognizer sends screen contents to a service.
-internal sealed class LocalLatinOcr : IDisposable
+internal sealed partial class LocalLatinOcr : IDisposable
 {
     private readonly TesseractEngine engine;
     private readonly bool mixed;
@@ -36,41 +36,52 @@ internal sealed class LocalLatinOcr : IDisposable
         }
         if (lightFloor > 0)
         {
+            var pixelWidth = padded.Width;
+            var pixelHeight = padded.Height;
             var data = padded.LockBits(new Rectangle(Point.Empty, padded.Size), ImageLockMode.ReadWrite, PixelFormat.Format24bppRgb);
             try
             {
-                for (var y = 0; y < padded.Height; y++)
-                    for (var x = 0; x < padded.Width; x++)
+                for (var y = 0; y < pixelHeight; y++)
+                    for (var x = 0; x < pixelWidth; x++)
                     {
                         var pixel = (byte*)data.Scan0 + y * data.Stride + x * 3;
-                        var value = (byte)(255 - Math.Clamp((Math.Min(pixel[0], Math.Min(pixel[1], pixel[2])) - lightFloor)
+                        var value = (byte)(255 - Math.Clamp((((77 * pixel[2] + 150 * pixel[1] + 29 * pixel[0] + 128) >> 8) - lightFloor)
                             * 255 / (240 - lightFloor), 0, 255));
                         pixel[0] = pixel[1] = pixel[2] = value;
                     }
             }
             finally { padded.UnlockBits(data); }
         }
-        using var stream = new MemoryStream();
-        padded.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
-        using var pix = Pix.LoadFromMemory(stream.ToArray());
+        using var pix = CopyPixels(padded, token);
         using var page = engine.Process(pix, singleLine ? PageSegMode.SingleLine : PageSegMode.SingleBlock);
         using var iterator = page.GetIterator();
         var words = new List<ScreenWord>();
+        var textLines = new List<List<ScreenWord>>();
+        var currentLine = new List<ScreenWord>();
         var confidences = new List<float>();
         string? text = null;
         var confidence = 0f;
+        var letterConfidences = new List<float>();
         Rectangle? symbolBounds = null;
         iterator.Begin();
         do
         {
+            if (!singleLine && iterator.IsAtBeginningOf(PageIteratorLevel.TextLine) && currentLine.Count > 0)
+            {
+                textLines.Add(currentLine);
+                currentLine = [];
+            }
             if (iterator.IsAtBeginningOf(PageIteratorLevel.Word))
             {
                 text = iterator.GetText(PageIteratorLevel.Word)?.Trim().Replace('“', '"').Replace('”', '"').Replace('’', '\'');
                 confidence = iterator.GetConfidence(PageIteratorLevel.Word) / 100;
+                letterConfidences.Clear();
                 symbolBounds = null;
             }
             if (iterator.TryGetBoundingBox(PageIteratorLevel.Symbol, out var symbol))
             {
+                if (iterator.GetText(PageIteratorLevel.Symbol)?.Any(char.IsLetterOrDigit) == true)
+                    letterConfidences.Add(iterator.GetConfidence(PageIteratorLevel.Symbol) / 100);
                 var rectangle = new Rectangle(symbol.X1, symbol.Y1, symbol.Width, symbol.Height);
                 symbolBounds = symbolBounds is { } previous ? Rectangle.Union(previous, rectangle) : rectangle;
             }
@@ -78,7 +89,9 @@ internal sealed class LocalLatinOcr : IDisposable
                 && !string.IsNullOrEmpty(text) && symbolBounds is { } box)
             {
                 words.Add(new ScreenWord(text, new RectangleF(origin.X + (box.X - padding) / scale,
-                    origin.Y + (box.Y - padding) / scale, box.Width / scale, box.Height / scale)));
+                    origin.Y + (box.Y - padding) / scale, box.Width / scale, box.Height / scale), confidence,
+                    letterConfidences.Count == 0 ? confidence : letterConfidences.Average()));
+                currentLine.Add(words[^1]);
                 confidences.Add(confidence);
             }
         } while (iterator.Next(PageIteratorLevel.Symbol));
@@ -120,7 +133,9 @@ internal sealed class LocalLatinOcr : IDisposable
                     };
             }
         }
-        return (ScreenOcr.BuildLines(words).ToArray(), confidences.Count == 0 ? 0 : confidences.Average());
+        if (currentLine.Count > 0) textLines.Add(currentLine);
+        return ((singleLine ? ScreenOcr.BuildLines(words) : textLines.SelectMany(ScreenOcr.BuildLines)).ToArray(),
+            confidences.Count == 0 ? 0 : confidences.Average());
     }
 
     public void Dispose() => engine.Dispose();
