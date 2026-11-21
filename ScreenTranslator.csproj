@@ -6,7 +6,7 @@
     <ApplicationIcon>ScreenTranslator.ico</ApplicationIcon>
     <AssemblyTitle>屏幕翻译</AssemblyTitle>
     <Product>屏幕翻译</Product>
-    <Version>1.0.15</Version>
+    <Version>1.0.17</Version>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

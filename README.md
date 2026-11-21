@@ -45,3 +45,5 @@ dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile
 ```
 
 [运行回归测试](tests/README.md)。
+
+遇到偶发卡顿时，可查看本机 `%LOCALAPPDATA%\ScreenTranslator\diagnostics.log` 和轮转文件 `diagnostics.log.1`。日志分别记录截屏、OCR、翻译和退出的时间、取消状态、目标进程 ID 与错误类型，便于区分识别耗时和联网翻译等待，每份最大约 512 KB；不记录识别文字、截图、窗口标题或密钥，不会上传。

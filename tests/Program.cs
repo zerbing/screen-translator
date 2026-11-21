@@ -6,7 +6,13 @@ using ScreenTranslator;
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 if (args.Contains("--environment-only", StringComparer.Ordinal))
     return EnvironmentTests.Run();
+if (args.Contains("--capture-only", StringComparer.Ordinal))
+    return CaptureLifecycleTests.Run();
+if (args.Contains("--workers-only", StringComparer.Ordinal))
+    return await OcrWorkerTests.RunAsync();
 EnvironmentTests.Run();
+CaptureLifecycleTests.Run();
+await OcrWorkerTests.RunAsync();
 var zoomMatrix = args.Contains("--zoom-matrix", StringComparer.Ordinal);
 var reportProgress = args.Contains("--progress", StringComparer.Ordinal);
 var reportTimings = args.Contains("--timings", StringComparer.Ordinal);
@@ -263,6 +269,27 @@ finally
 }
 
 const string quest = "Use the lamp crystal to light up the secret message";
+const string waypointDescription = "Odd devices that are scattered across Teyvat, seemingly forming a certain order. "
+    + "People on the continent see them as ancient gimmicks — they are accustomed to their existence despite not "
+    + "knowing their purpose. To the foreign traveler, however, their function becomes quite apparent.";
+var waypointPoints = Paragraphs(waypointDescription, (3170, 384), (3260, 455), (3140, 525),
+    (3300, 592), (3450, 666), (3260, 735), (3050, 805), (3410, 875), (3620, 946),
+    (2925, 384), (3630, 384), (2925, 946)).ToArray();
+foreach (var game in new[] { true, false })
+    await TestFixture("teleport-waypoint-panel", waypointPoints, [1.0, 0.75, 0.5], game: game);
+using (var panel = new Bitmap(Path.Combine(fixtureRoot, "teleport-waypoint-panel.png")))
+using (var screen = new Bitmap(3840, 2160))
+{
+    using (var graphics = Graphics.FromImage(screen))
+    {
+        graphics.Clear(Color.Black);
+        graphics.DrawImageUnscaled(panel, 1, 1);
+    }
+    foreach (var game in new[] { true, false })
+        foreach (var point in waypointPoints.Where((_, index) => index is 0 or 5 or 8))
+            await TestSample("teleport-waypoint-panel full screen", screen,
+                point with { X = point.X + 1, Y = point.Y + 1 }, 1, game: game);
+}
 const string wavebinderDescription = "A monstrously strong beast. At intervals, it drinks a hot beverage to build up its Courage. "
     + "Once its Courage is full, it enters the Valiant state, causing its attacks to become more ferocious and greatly increasing "
     + "all Elemental RES and Physical RES. While in this state, its Courage will be continuously consumed, and it will exit the "
@@ -639,6 +666,77 @@ ScreenLine LayoutLine(int x, int y, int width, string text)
     return new ScreenLine([new ScreenWord(text, bounds)], bounds);
 }
 
+ScreenLine FlowLine(float x, float y, float width, float height, string text)
+{
+    var offset = 0;
+    var words = text.Split(' ').Select(value =>
+    {
+        var bounds = new RectangleF(x + width * offset / text.Length, y, width * value.Length / text.Length, height);
+        offset += value.Length + 1;
+        return new ScreenWord(value, bounds);
+    }).ToArray();
+    return new ScreenLine(words, new RectangleF(x, y, width, height));
+}
+
+const string airflow = "Portable sensors monitor the airflow while technicians compare each signal "
+    + "and verify that readings agree before the next inspection begins.";
+foreach (var style in new[]
+{
+    (Font: "Georgia", Paper: Color.Linen, Ink: Color.DarkSlateBlue),
+    (Font: "Segoe UI", Paper: Color.FromArgb(25, 35, 45), Ink: Color.LightGreen),
+    (Font: "Consolas", Paper: Color.White, Ink: Color.DarkRed)
+})
+{
+    using var image = new Bitmap(1400, 470);
+    using (var graphics = Graphics.FromImage(image))
+    using (var font = new Font(style.Font, 42, FontStyle.Regular, GraphicsUnit.Pixel))
+    using (var brush = new SolidBrush(style.Ink))
+    {
+        graphics.Clear(style.Paper);
+        graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        var rows = new[] { "Portable sensors monitor the airflow", "while technicians compare each signal",
+            "and verify that readings agree", "before the next inspection begins." };
+        for (var index = 0; index < rows.Length; index++)
+            graphics.DrawString(rows[index], font, brush, 70, 60 + index * 62);
+    }
+    await TestRenderedZooms($"generated aligned flow {style.Font}", image,
+        Paragraphs(airflow, (250, 87), (400, 149), (200, 211), (300, 273)),
+        game: false, ratios: [1.0, 0.5]);
+}
+foreach (var scale in new[] { .5f, 1f, 1.75f })
+{
+    ScreenLine Flow(float x, float y, float width, float height, string text) =>
+        FlowLine(x * scale, y * scale, width * scale, height * scale, text);
+    ScreenLine[] body =
+    [
+        Flow(70, 50, 430, 20, "Portable sensors monitor the airflow"),
+        Flow(70, 86, 470, 26, "while technicians compare each signal"),
+        Flow(70, 122, 410, 20, "and verify that readings agree"),
+        Flow(70, 158, 450, 26, "before the next inspection begins.")
+    ];
+    var heading = Flow(70, 14, 200, 20, "Current equipment information");
+    var footer = Flow(70, 230, 450, 20, "Another paragraph starts after blank space.");
+    ScreenLine[] column =
+    [
+        Flow(620, 50, 410, 20, "Several independent monitors report status"),
+        Flow(620, 86, 410, 26, "and transmit their readings separately"),
+        Flow(620, 122, 410, 20, "before operators complete the final checks.")
+    ];
+    ScreenLine[] layout = [heading, .. body, footer, .. column];
+    foreach (var row in body)
+        Check($"aligned wide-spaced flow from row {row.Bounds.Top} at {scale}", airflow,
+            TextSelection.At(layout, Point.Round(new PointF(row.Bounds.Left + row.Bounds.Width / 2,
+                row.Bounds.Top + row.Bounds.Height / 2)), true, null)?.Text);
+    Check($"short heading stays separate at {scale}", heading.Text,
+        TextSelection.At(layout, Point.Round(new PointF(100 * scale, 24 * scale)), true, null)?.Text);
+    Check($"blank space separates a later paragraph at {scale}", footer.Text,
+        TextSelection.At(layout, Point.Round(new PointF(100 * scale, 240 * scale)), true, null)?.Text);
+    Check($"neighboring column stays independent at {scale}", string.Join(' ', column.Select(row => row.Text)),
+        TextSelection.At(layout, Point.Round(new PointF(700 * scale, 98 * scale)), true, null)?.Text);
+    Check($"a different column is not evidence to join a heading at {scale}", body[0].Text,
+        TextSelection.At([body[0], body[1], column[2]], Point.Round(new PointF(100 * scale, 60 * scale)), true, null)?.Text);
+}
+
 ScreenLine[] commands =
 [
     LayoutLine(10, 10, 55, "/open"), LayoutLine(90, 10, 260, "Open the current workspace"),
@@ -970,7 +1068,8 @@ async Task TestSample(string name, Bitmap frame, Sample sample, double ratio, bo
         game, game ? genshin : null, Read, default, ReadOption, ReadLayout);
     if (reportTimings)
         Console.WriteLine("TIMING " + JsonSerializer.Serialize(new { name, ratio, sample.X, sample.Y,
-            paragraph = sample.Paragraph, ms = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds }));
+            paragraph = sample.Paragraph, frame.Width, frame.Height, dpi, game,
+            ms = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds }));
     var actual = target is null ? null : game ? genshin.CorrectOcr(target.Text) : target.Text;
     var description = $"{name} {ratio} ({sample.X},{sample.Y}) {(sample.Paragraph ? "paragraph" : "word")}";
     Check(description, sample.Expected, sample.Project is null ? actual : sample.Project(actual));

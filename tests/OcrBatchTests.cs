@@ -37,6 +37,12 @@ internal static class OcrBatchTests
             results.Add(($"{(useLatin ? "Latin" : "Windows")} batch reads complete text after cancellation", sentence,
                 string.Join(' ', rows.Select(row => row.Text))));
         }
+        var repeated = await ocr.ReadParagraphViewsAsync(windows[..3], Point.Empty, default);
+        results.Add(("identical Windows views reuse the same observed result", "True",
+            repeated.Skip(1).All(rows => ReferenceEquals(repeated[0], rows)).ToString()));
+        var scaled = await ocr.ReadParagraphViewsAsync(new[] { ((Func<Bitmap>)Image, 1f), ((Func<Bitmap>)Image, 1.5f) },
+            Point.Empty, default);
+        results.Add(("different scales remain independent observations", "False", ReferenceEquals(scaled[0], scaled[1]).ToString()));
         return results.ToArray();
 
         static Bitmap Image()

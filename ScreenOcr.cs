@@ -90,9 +90,23 @@ internal sealed partial class ScreenOcr : IDisposable
 
     private Bitmap Capture(Rectangle area, CancellationToken token)
     {
+        var started = DiagnosticLog.Begin("capture");
+        try { return CaptureCore(area, token); }
+        catch (Exception error)
+        {
+            DiagnosticLog.Write("capture.error", $"type={error.GetType().Name} hresult={error.HResult:X8}");
+            throw;
+        }
+        finally { DiagnosticLog.End("capture", started, $"cancelled={token.IsCancellationRequested}"); }
+    }
+
+    private Bitmap CaptureCore(Rectangle area, CancellationToken token)
+    {
         token.ThrowIfCancellationRequested();
         if (hdrCapture.TryRead(area, token) is { } hdr)
             return hdr;
+        token.ThrowIfCancellationRequested();
+        DiagnosticLog.Write("capture.gdi");
         var original = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppArgb);
         try
         {
@@ -2025,7 +2039,8 @@ internal static partial class TextSelection
                 && Math.Abs(first.Bounds.Left + first.Bounds.Width / 2 - second.Bounds.Left - second.Bounds.Width / 2) < height)
                 return false;
             if (gap > height * .55f && first.Words.Length <= 5 && !char.IsPunctuation(first.Text[^1])
-                && (second.Words.Length <= 8 || first.Bounds.Width < second.Bounds.Width * .65f))
+                && (second.Words.Length <= 8 || first.Bounds.Width < second.Bounds.Width * .65f)
+                && !HasAlignedFlow(lines, first, second))
                 return false;
             if (first.Words.Length <= 4 && gap > height * .55f
                 && CountdownLabel().IsMatch(second.Text) && !char.IsPunctuation(first.Text[^1]))
@@ -2047,6 +2062,27 @@ internal static partial class TextSelection
             // in that case to avoid joining text from a neighboring column.
             return overlap >= narrower * 0.82f || overlap >= wider * 0.6f;
         }).MinBy(candidate => Math.Abs(candidate.Bounds.Top + candidate.Bounds.Height / 2 - current.Top - current.Height / 2));
+    }
+
+    private static bool HasAlignedFlow(ScreenLine[] lines, ScreenLine first, ScreenLine second)
+    {
+        var height = Math.Max(first.Bounds.Height, second.Bounds.Height);
+        var step = second.Bounds.Top - first.Bounds.Top;
+        if (first.Words.Length < 3 || second.Words.Length < 3 || step <= 0
+            || Math.Min(first.Bounds.Height, second.Bounds.Height) < height * .72f
+            || Math.Abs(first.Bounds.Left - second.Bounds.Left) > height * .5f
+            || Math.Min(first.Bounds.Width, second.Bounds.Width) < Math.Max(first.Bounds.Width, second.Bounds.Width) * .65f
+            || ListItemParts(first.Text).Prefix.Length != 0 || ListItemParts(second.Text).Prefix.Length != 0)
+            return false;
+        // A third observed row at the same cadence distinguishes an aligned
+        // text flow from a short heading followed by a separate paragraph.
+        return lines.Any(other => !ReferenceEquals(other, first) && !ReferenceEquals(other, second)
+            && other.Words.Length >= 3 && ListItemParts(other.Text).Prefix.Length == 0
+            && Math.Min(other.Bounds.Height, height) >= Math.Max(other.Bounds.Height, height) * .72f
+            && Math.Abs(other.Bounds.Left - first.Bounds.Left) <= height * .5f
+            && other.Bounds.Width >= Math.Min(first.Bounds.Width, second.Bounds.Width) * .65f
+            && (Math.Abs(first.Bounds.Top - other.Bounds.Top - step) <= height * .25f
+                || Math.Abs(other.Bounds.Top - second.Bounds.Top - step) <= height * .25f));
     }
 
     internal static Rectangle ExtendParagraphCapture(Rectangle capture, Rectangle available, RectangleF text, float lineHeight)

@@ -53,6 +53,7 @@ internal sealed class TranslatorApp : ApplicationContext
     private Point anchor;
     private long stableSince;
     private CancellationTokenSource? pending;
+    private Task activeRequest = Task.CompletedTask;
     private bool busy;
     private bool exiting;
     private bool editingSettings;
@@ -151,6 +152,12 @@ internal sealed class TranslatorApp : ApplicationContext
         }
 
         busy = true;
+        await (activeRequest = RecognizeAsync(recognizer, available, capture, dpi, readParagraph, hadSpeechRequest, window));
+    }
+
+    private async Task RecognizeAsync(ScreenOcr recognizer, Rectangle available, Rectangle capture,
+        float dpi, bool readParagraph, bool hadSpeechRequest, IntPtr window)
+    {
         using var request = new CancellationTokenSource();
         pending = request;
         var cursor = anchor;
@@ -159,6 +166,8 @@ internal sealed class TranslatorApp : ApplicationContext
         var windowTitle = targetWindowTitle;
         var isDemoWindow = IsMainWindow(window);
         var isDesktop = targetIsDesktop;
+        Desktop.GetWindowThreadProcessId(window, out var targetId);
+        var started = DiagnosticLog.Begin("recognition", $"targetPid={targetId} paragraph={readParagraph}");
         try
         {
             if (readParagraph) popup.Dismiss();
@@ -180,6 +189,7 @@ internal sealed class TranslatorApp : ApplicationContext
                     frame is null ? null : frame.ReadLayoutAsync).ConfigureAwait(false);
                 return (result.Target, result.Word, activeGlossary);
             }, request.Token);
+            DiagnosticLog.End("recognition.ocr", started);
             if (!StillHovering(request, window, cursor, readParagraph))
                 return;
             hoverWord = word is null ? null : word with { Text = glossary?.CorrectOcr(word.Text) ?? word.Text };
@@ -199,6 +209,7 @@ internal sealed class TranslatorApp : ApplicationContext
             if (glossary is not null)
                 target = target with { Text = glossary.CorrectOcr(target.Text), Context = glossary.CorrectOcr(target.Context) };
 
+            var translationStarted = DiagnosticLog.Begin("translation");
             var operation = translator.TranslateAsync(target, readParagraph, glossary, apiKey,
                 request.Token, baiduCredentials, activeEngine);
             if (!operation.IsCompleted)
@@ -210,14 +221,17 @@ internal sealed class TranslatorApp : ApplicationContext
             }
 
             var translated = await operation;
+            DiagnosticLog.End("translation", translationStarted);
             if (StillHovering(request, window, cursor, readParagraph))
             {
                 var source = translated.TermsMayBeMissing ? $"{translated.Source} · 术语可能有遗漏" : translated.Source;
                 popup.Present(target.Text, translated.Text, source, target.Bounds, cursor, window);
             }
         }
+        catch (OperationCanceledException) when (request.IsCancellationRequested) { }
         catch (Exception error) when (Translator.IsServiceError(error) || error is Win32Exception or ExternalException)
         {
+            DiagnosticLog.Write("recognition.error", $"type={error.GetType().Name} hresult={error.HResult:X8}");
             if (StillHovering(request, window, cursor, readParagraph))
             {
                 var message = error switch
@@ -233,6 +247,7 @@ internal sealed class TranslatorApp : ApplicationContext
         }
         finally
         {
+            DiagnosticLog.End("recognition", started, $"cancelled={request.IsCancellationRequested}");
             if (hadSpeechRequest && !request.IsCancellationRequested)
                 speechRequested = false;
             pending = null;
@@ -379,12 +394,27 @@ internal sealed class TranslatorApp : ApplicationContext
 
     protected override void ExitThreadCore()
     {
+        if (exiting)
+            return;
+        DiagnosticLog.Write("app.exit.request", "pending=" + !activeRequest.IsCompleted);
         exiting = true;
         timer.Stop();
         ResetHover();
         tray.Visible = false;
         mainWindow?.Close();
-        base.ExitThreadCore();
+        FinishExitAsync();
+    }
+
+    private async void FinishExitAsync()
+    {
+        // Keep the UI message loop alive until every started OCR/capture task
+        // has unwound. Disposing its native engines earlier races the worker.
+        try { await activeRequest; }
+        finally
+        {
+            DiagnosticLog.Write("app.exit.drained");
+            base.ExitThreadCore();
+        }
     }
 
     protected override void Dispose(bool disposing)

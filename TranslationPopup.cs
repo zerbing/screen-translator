@@ -73,7 +73,11 @@ internal sealed class TranslationPopup : Form
         var pad = (int)(15 * dpi);
         var preferredWidth = chinese.Length > 180 ? 680 : 455;
         var maxWidth = Math.Max(100, Math.Min((int)(preferredWidth * dpi), screen.Width - pad * 4));
-        using var graphics = Graphics.FromHwnd(targetWindow);
+        // Measuring text must not acquire a DC from another process. A game
+        // may already be destroying its rendering window at this point.
+        using var metrics = new Bitmap(1, 1);
+        metrics.SetResolution(96 * dpi, 96 * dpi);
+        using var graphics = Graphics.FromImage(metrics);
         var body = TextRenderer.MeasureText(graphics, chinese, bodyFont, new Size(maxWidth, int.MaxValue), TextFlags);
         var caption = TextRenderer.MeasureText(graphics, english, subFont, new Size(maxWidth, int.MaxValue), TextFlags);
         var phonetic = TextRenderer.MeasureText(graphics, pronunciationText, subFont, new Size(maxWidth, int.MaxValue), TextFlags);

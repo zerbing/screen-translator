@@ -19,6 +19,7 @@ internal static class Program
         if (!TakeOwnershipOrActivate(instance))
             return;
 
+        DiagnosticLog.Write("app.start", "version=" + Application.ProductVersion);
         try
         {
             if (!StartupEnvironment.EnsureReady())
@@ -31,6 +32,7 @@ internal static class Program
         }
         finally
         {
+            DiagnosticLog.Write("app.exit");
             instance.ReleaseMutex();
         }
     }

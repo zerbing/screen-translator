@@ -64,6 +64,7 @@ internal sealed class HdrScreenCapture : IDisposable
         }
         catch (Exception error) when (error is SharpGenException or DllNotFoundException or EntryPointNotFoundException)
         {
+            DiagnosticLog.Write("capture.hdr.error", $"type={error.GetType().Name} hresult={error.HResult:X8}");
             // The desktop can change modes or reject duplication while a game is opening.
             if (device?.DeviceRemovedReason.Failure == true)
                 ReleaseDevice();
@@ -89,6 +90,20 @@ internal sealed class HdrScreenCapture : IDisposable
     private static Bitmap? ReadRegion(ID3D11Device device, ID3D11DeviceContext context, IDXGIOutput6 output,
         Rectangle area, float[] gains, CancellationToken token)
     {
+        // Only keep the desktop frame while submitting the copy. GPU readback
+        // and CPU conversion must not hold a game's fullscreen surface lease.
+        using var staging = CopyRegion(device, context, output, area, token);
+        if (staging is null)
+            return null;
+
+        var result = ReadStaging(context, staging, area.Size, gains, token);
+        if (result is null) DiagnosticLog.Write("capture.hdr.empty");
+        return result;
+    }
+
+    private static ID3D11Texture2D? CopyRegion(ID3D11Device device, ID3D11DeviceContext context,
+        IDXGIOutput6 output, Rectangle area, CancellationToken token)
+    {
         Format[] formats = [Format.R16G16B16A16_Float, Format.B8G8R8A8_UNorm];
         using var duplication = output.DuplicateOutput1(device, (uint)formats.Length, formats);
         var deadline = Environment.TickCount64 + FrameTimeout;
@@ -98,7 +113,10 @@ internal sealed class HdrScreenCapture : IDisposable
             var remaining = (uint)Math.Max(1, deadline - Environment.TickCount64);
             var result = duplication.AcquireNextFrame(remaining, out var frame, out var resource);
             if (result == Vortice.DXGI.ResultCode.WaitTimeout)
+            {
+                DiagnosticLog.Write("capture.hdr.frame.timeout");
                 break;
+            }
             result.CheckError();
             try
             {
@@ -114,16 +132,47 @@ internal sealed class HdrScreenCapture : IDisposable
 
                     var cropped = new Texture2DDescription(desc.Format, (uint)area.Width, (uint)area.Height, 1, 1,
                         BindFlags.None, ResourceUsage.Staging, CpuAccessFlags.Read);
-                    using var staging = device.CreateTexture2D(cropped);
-                    context.CopySubresourceRegion(staging, 0, 0, 0, 0, texture, 0,
-                        new Box(area.Left, area.Top, 0, area.Right, area.Bottom, 1));
-                    context.Map(staging, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.None, out var map).CheckError();
-                    try { return ConvertFrame(map, area.Size, gains, token); }
-                    finally { context.Unmap(staging, 0); }
+                    var staging = device.CreateTexture2D(cropped);
+                    try
+                    {
+                        context.CopySubresourceRegion(staging, 0, 0, 0, 0, texture, 0,
+                            new Box(area.Left, area.Top, 0, area.Right, area.Bottom, 1));
+                        context.Flush();
+                        return staging;
+                    }
+                    catch
+                    {
+                        staging.Dispose();
+                        throw;
+                    }
                 }
             }
             finally { duplication.ReleaseFrame(); }
         }
+        return null;
+    }
+
+    internal static Bitmap? ReadStaging(ID3D11DeviceContext context, ID3D11Texture2D staging,
+        Size size, float[] gains, CancellationToken token)
+    {
+        var deadline = Environment.TickCount64 + FrameTimeout;
+        while (Environment.TickCount64 < deadline)
+        {
+            token.ThrowIfCancellationRequested();
+            var result = context.Map(staging, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.DoNotWait, out var map);
+            if (result == Vortice.DXGI.ResultCode.WasStillDrawing)
+            {
+                // A mode transition can stall the GPU. Stay cancellable and
+                // let the caller use the normal screen capture fallback.
+                Thread.Sleep(1);
+                continue;
+            }
+            result.CheckError();
+            try { return ConvertFrame(map, size, gains, token); }
+            finally { context.Unmap(staging, 0); }
+        }
+        token.ThrowIfCancellationRequested();
+        DiagnosticLog.Write("capture.hdr.readback.timeout");
         return null;
     }
 
